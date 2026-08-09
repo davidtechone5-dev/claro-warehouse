@@ -1,7 +1,8 @@
 import axios from "axios";
 
-const API_BASE = import.meta.env.VITE_API_URL 
-  ? `${import.meta.env.VITE_API_URL}/wms` 
+const metaEnv = (import.meta as any).env || {};
+const API_BASE = metaEnv.VITE_API_URL 
+  ? `${metaEnv.VITE_API_URL}/wms` 
   : "http://localhost:5000/api/v1/wms";
 
 const client = axios.create({
