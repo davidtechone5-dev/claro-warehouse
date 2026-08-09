@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../utils/api";
-import { Plus, Trash2, CheckCircle, AlertTriangle, ArrowRight } from "lucide-react";
+import { Plus, Trash2, CheckCircle, AlertTriangle, ArrowRight, Warehouse as WarehouseIcon, LogOut } from "lucide-react";
 
 export function Warehouse() {
   // Tab control: 'dashboard', 'requests', 'entry', 'log', 'challans'
@@ -417,17 +417,26 @@ export function Warehouse() {
         {/* Top: Brand Logo */}
         <div style={styles.logoContainer}>
           <div style={styles.logoCard}>
-            <span style={{ color: "#DC2626", fontWeight: "900", fontSize: "1.2rem", letterSpacing: "0.05em" }}>CLARO</span>
-            <span style={{ color: "#000", fontWeight: "700", fontSize: "0.8rem", letterSpacing: "0.1em", marginLeft: "4px" }}>ENERGY</span>
+            <div style={styles.logoTopHalf}>
+              <span style={styles.logoClaroText}>CLARO</span>
+              <span style={styles.logoRegistered}>®</span>
+            </div>
+            <div style={styles.logoBottomHalf}>
+              ENERGY
+            </div>
           </div>
         </div>
 
         {/* Middle: Sidebar Menu */}
         <div style={styles.sidebarMenu}>
           <div style={styles.sidebarItemActive}>
-            <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <span style={{ fontSize: "1.1rem" }}>📦</span> WMS Dashboard
-            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+              <WarehouseIcon size={22} color="#DC2626" />
+              <div style={{ display: "flex", flexDirection: "column", lineHeight: "1.2" }}>
+                <span style={{ fontSize: "0.95rem", fontWeight: "700" }}>WMS</span>
+                <span style={{ fontSize: "0.95rem", fontWeight: "700" }}>Dashboard</span>
+              </div>
+            </div>
             <span style={styles.sidebarBadgeActive}>ACTIVE</span>
           </div>
         </div>
@@ -454,6 +463,7 @@ export function Warehouse() {
             }}
             style={styles.signOutBtn}
           >
+            <LogOut size={16} color="#EF4444" />
             Sign Out
           </button>
         </div>
@@ -1404,14 +1414,50 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: "2rem"
   },
   logoCard: {
-    border: "1px solid #000000",
-    padding: "0.5rem 1rem",
+    border: "2px solid #000000",
     borderRadius: "4px",
-    display: "inline-flex",
-    alignItems: "center",
-    fontWeight: "bold",
+    width: "160px",
+    overflow: "hidden",
+    fontFamily: "var(--font-title)",
     backgroundColor: "#FFFFFF",
-    boxShadow: "0 2px 4px rgba(0,0,0,0.05)"
+    boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center"
+  },
+  logoTopHalf: {
+    backgroundColor: "#FFFFFF",
+    padding: "0.25rem 0",
+    width: "100%",
+    textAlign: "center",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center"
+  },
+  logoClaroText: {
+    color: "#DC2626",
+    fontWeight: "900",
+    fontSize: "1.3rem",
+    letterSpacing: "0.05em",
+    lineHeight: "1.1"
+  },
+  logoRegistered: {
+    color: "#DC2626",
+    fontSize: "0.75rem",
+    alignSelf: "flex-start",
+    marginTop: "2px",
+    fontWeight: "bold"
+  },
+  logoBottomHalf: {
+    backgroundColor: "#000000",
+    color: "#FFFFFF",
+    padding: "0.2rem 0",
+    width: "100%",
+    textAlign: "center",
+    fontSize: "0.65rem",
+    fontWeight: "800",
+    letterSpacing: "0.4em",
+    textIndent: "0.4em"
   },
   sidebarMenu: {
     flex: 1,
@@ -1424,12 +1470,11 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     alignItems: "center",
     padding: "0.75rem 1rem",
-    backgroundColor: "rgba(220, 38, 38, 0.05)",
-    borderLeft: "3px solid #DC2626",
-    borderRadius: "0 8px 8px 0",
+    backgroundColor: "#FEF2F2",
+    borderLeft: "4px solid #DC2626",
+    borderRadius: "8px",
     color: "#DC2626",
-    fontWeight: "600",
-    fontSize: "0.95rem",
+    fontFamily: "var(--font-title)",
     cursor: "default"
   },
   sidebarBadgeActive: {
@@ -1486,14 +1531,14 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     gap: "0.5rem",
-    padding: "0.5rem 1rem",
-    backgroundColor: "transparent",
-    border: "1px solid var(--border-color)",
+    padding: "0.65rem 1rem",
+    backgroundColor: "#FFFFFF",
+    border: "1px solid #E5E7EB",
     borderRadius: "8px",
-    color: "var(--text-muted)",
+    color: "#EF4444",
     cursor: "pointer",
-    fontSize: "0.85rem",
-    fontWeight: "600",
+    fontSize: "0.9rem",
+    fontWeight: "700",
     transition: "all 0.2s"
   },
   loading: {
