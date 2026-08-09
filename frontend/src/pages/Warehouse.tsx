@@ -94,9 +94,14 @@ export function Warehouse() {
         setFarmers(fms);
 
         if (whs.length > 0) {
-          const savedWh = localStorage.getItem("claro_selected_warehouse");
-          const defaultWh = whs.find((w: any) => w.name.includes("Jalna")) || whs[0];
-          const activeWhId = savedWh && whs.some((w: any) => w.id === savedWh) ? savedWh : defaultWh.id;
+          let activeWhId = whs[0].id;
+          if (currentUser?.warehouseId) {
+            activeWhId = currentUser.warehouseId;
+          } else {
+            const savedWh = localStorage.getItem("claro_selected_warehouse");
+            const defaultWh = whs.find((w: any) => w.id === "all") || whs[0];
+            activeWhId = savedWh && whs.some((w: any) => w.id === savedWh) ? savedWh : defaultWh.id;
+          }
           setSelectedWarehouseId(activeWhId);
         }
 
@@ -468,7 +473,7 @@ export function Warehouse() {
         </div>
 
         <div style={styles.headerRight}>
-          {currentUser?.role === "Warehouse" && (
+          {(currentUser?.role === "Warehouse" || currentUser?.role === "Warehouse Admin") && (
             <button 
               type="button" 
               onClick={handleWipeAllWms}
@@ -483,11 +488,19 @@ export function Warehouse() {
             <select
               value={selectedWarehouseId}
               onChange={(e) => setSelectedWarehouseId(e.target.value)}
-              style={styles.whSelect}
+              style={{
+                ...styles.whSelect,
+                cursor: currentUser?.warehouseId ? "not-allowed" : "pointer",
+                opacity: currentUser?.warehouseId ? 0.85 : 1
+              }}
+              disabled={!!currentUser?.warehouseId}
             >
-              {warehouses.map(w => (
-                <option key={w.id} value={w.id}>{w.name}</option>
-              ))}
+              {warehouses
+                .filter(w => !currentUser?.warehouseId || w.id === currentUser.warehouseId)
+                .map(w => (
+                  <option key={w.id} value={w.id}>{w.name}</option>
+                ))
+              }
             </select>
           </div>
         </div>

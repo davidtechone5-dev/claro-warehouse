@@ -4,7 +4,7 @@ import { Mail, Key, ShieldAlert } from "lucide-react";
 
 function App() {
   const [user, setUser] = useState<any>(null);
-  const [email, setEmail] = useState("warehouse@claro.com");
+  const [email, setEmail] = useState("admin@claro.com");
   const [password, setPassword] = useState("claroenergy");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -27,13 +27,38 @@ function App() {
       return;
     }
 
-    // Authenticate with default Claro Energy credentials
-    if (email.toLowerCase() === "warehouse@claro.com" && password === "claroenergy") {
+    const cleanEmail = email.toLowerCase().trim();
+
+    // 1. Warehouse Admin/Master account
+    if (cleanEmail === "admin@claro.com" && password === "claroenergy") {
       const loggedUser = {
-        id: "user-default-admin",
-        email: "warehouse@claro.com",
-        fullName: "Milan — Maintenance Lead",
-        role: "Warehouse"
+        id: "user-admin",
+        email: "admin@claro.com",
+        fullName: "Milan — Maintenance Lead (Warehouse Admin)",
+        role: "Warehouse Admin"
+      };
+      localStorage.setItem("claro_user", JSON.stringify(loggedUser));
+      setUser(loggedUser);
+      setErrorMsg(null);
+      return;
+    }
+
+    // 2. Warehouse specific accounts
+    const warehouseAccounts: Record<string, { name: string; whId: string }> = {
+      "jalna@claro.com": { name: "Jalna Warehouse Manager", whId: "wh-jalna-1111" },
+      "rajasthan@claro.com": { name: "Rajasthan Warehouse Manager", whId: "wh-rajasthan-2222" },
+      "haryana@claro.com": { name: "Haryana Warehouse Manager", whId: "wh-haryana-3333" },
+      "mp@claro.com": { name: "MP Warehouse Manager", whId: "wh-mp-4444" }
+    };
+
+    if (warehouseAccounts[cleanEmail] && password === "claroenergy") {
+      const details = warehouseAccounts[cleanEmail];
+      const loggedUser = {
+        id: `user-${details.whId}`,
+        email: cleanEmail,
+        fullName: details.name,
+        role: "Warehouse",
+        warehouseId: details.whId
       };
       localStorage.setItem("claro_user", JSON.stringify(loggedUser));
       setUser(loggedUser);
