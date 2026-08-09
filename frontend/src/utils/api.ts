@@ -1,7 +1,8 @@
 import axios from "axios";
 
-// Target port 5000 where our Express backend is running
-const API_BASE = "http://localhost:5000/api/v1/wms";
+const API_BASE = import.meta.env.VITE_API_URL 
+  ? `${import.meta.env.VITE_API_URL}/wms` 
+  : "http://localhost:5000/api/v1/wms";
 
 const client = axios.create({
   baseURL: API_BASE,
