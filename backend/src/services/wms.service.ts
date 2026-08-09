@@ -841,10 +841,9 @@ export const wmsService = {
       await tx.challan.deleteMany({});
       await tx.inventoryMovement.deleteMany({});
       await tx.unitLedger.deleteMany({});
-      await tx.materialRequest.updateMany({
-        where: { status: "DISPATCHED" },
-        data: { status: "PENDING" }
-      });
+      await tx.materialRequest.deleteMany({});
+      await tx.complaint.deleteMany({});
+      await tx.ticket.deleteMany({});
     });
   },
 
@@ -1003,7 +1002,7 @@ export const wmsService = {
         // 4. Resolve Material Request unique ID and pre-populate JSON items array
         const cleanedTime = timestamp ? new Date(timestamp).getTime() : "no-time";
         const requestUniqueId = `req-${cleanAppId}-${cleanMaterial.replace(/[^a-zA-Z0-9]/g, "")}-${cleanedTime}`.substring(0, 80);
-        
+
         const partNames = cleanMaterial.split(",").map(p => p.trim());
         const itemsJson = partNames.map((name, index) => ({
           id: `item-${index}`,
