@@ -1001,7 +1001,8 @@ export const wmsService = {
         });
 
         // 4. Resolve Material Request unique ID and pre-populate JSON items array
-        const requestUniqueId = `req-${cleanAppId}-${cleanMaterial.replace(/[^a-zA-Z0-9]/g, "")}`.substring(0, 80);
+        const cleanedTime = timestamp ? new Date(timestamp).getTime() : "no-time";
+        const requestUniqueId = `req-${cleanAppId}-${cleanMaterial.replace(/[^a-zA-Z0-9]/g, "")}-${cleanedTime}`.substring(0, 80);
         
         const partNames = cleanMaterial.split(",").map(p => p.trim());
         const itemsJson = partNames.map((name, index) => ({
@@ -1119,7 +1120,8 @@ export const wmsService = {
       });
 
       // 4. Resolve Material Request
-      const requestUniqueId = `req-${cleanAppId}-${cleanMaterial.replace(/[^a-zA-Z0-9]/g, "")}`.substring(0, 80);
+      const cleanedTime = timestamp ? new Date(timestamp).getTime() : "no-time";
+      const requestUniqueId = `req-${cleanAppId}-${cleanMaterial.replace(/[^a-zA-Z0-9]/g, "")}-${cleanedTime}`.substring(0, 80);
       const partNames = cleanMaterial.split(",").map((p: string) => p.trim());
       const itemsJson = partNames.map((name: string, index: number) => ({
         id: `item-${index}`,
