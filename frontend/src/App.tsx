@@ -1,12 +1,23 @@
 import { useEffect, useState } from "react";
 import { Warehouse } from "./pages/Warehouse.tsx";
-import { Mail, Key, ShieldAlert } from "lucide-react";
+import { Mail, Key, ShieldAlert, Warehouse as WarehouseIcon } from "lucide-react";
+import { api } from "./utils/api";
+
+const DEFAULT_WAREHOUSES = [
+  { id: "all", name: "All Warehouses" },
+  { id: "wh-jalna-1111", name: "Jalna MH" },
+  { id: "wh-rajasthan-2222", name: "Rajasthan" },
+  { id: "wh-haryana-3333", name: "Haryana" },
+  { id: "wh-mp-4444", name: "MP" }
+];
 
 function App() {
   const [user, setUser] = useState<any>(null);
-  const [email, setEmail] = useState("warehouse@claro.com");
-  const [password, setPassword] = useState("claroenergy");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [warehouses, setWarehouses] = useState<any[]>(DEFAULT_WAREHOUSES);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("all");
 
   useEffect(() => {
     const savedUser = localStorage.getItem("claro_user");
@@ -20,6 +31,20 @@ function App() {
     }
   }, []);
 
+  useEffect(() => {
+    async function loadWarehouses() {
+      try {
+        const whs = await api.getWmsWarehouses();
+        if (whs && whs.length > 0) {
+          setWarehouses(whs);
+        }
+      } catch (err) {
+        console.error("Failed to load warehouses for login", err);
+      }
+    }
+    loadWarehouses();
+  }, []);
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
@@ -31,12 +56,38 @@ function App() {
 
     // Single Master Warehouse Admin account
     if (cleanEmail === "warehouse@claro.com" && password === "claroenergy") {
+      const selectedWh = warehouses.find(w => w.id === selectedWarehouseId);
+      const warehouseName = selectedWh ? selectedWh.name : "All Warehouses";
+
       const loggedUser = {
         id: "user-admin",
         email: "warehouse@claro.com",
-        fullName: "Milan — Maintenance Lead (Warehouse Admin)",
-        role: "Warehouse Admin"
+        fullName: `Milan — Maintenance Lead (${warehouseName})`,
+        role: selectedWarehouseId === "all" ? "Warehouse Admin" : "Warehouse Operator",
+        warehouseId: selectedWarehouseId,
+        warehouseName: warehouseName
       };
+
+      // Set active warehouse context header and save user session
+      localStorage.setItem("claro_selected_warehouse", selectedWarehouseId);
+      localStorage.setItem("claro_user", JSON.stringify(loggedUser));
+      setUser(loggedUser);
+      setErrorMsg(null);
+    } else if (cleanEmail === "haryana@claro.com" && (password === "claroenergy" || password === "claro_haryana")) {
+      const targetWhId = "wh-haryana-3333";
+      const selectedWh = warehouses.find(w => w.id === targetWhId);
+      const warehouseName = selectedWh ? selectedWh.name : "Haryana";
+
+      const loggedUser = {
+        id: "user-haryana",
+        email: "haryana@claro.com",
+        fullName: "Haryana Maintenance Lead",
+        role: "Warehouse Operator",
+        warehouseId: targetWhId,
+        warehouseName: warehouseName
+      };
+
+      localStorage.setItem("claro_selected_warehouse", targetWhId);
       localStorage.setItem("claro_user", JSON.stringify(loggedUser));
       setUser(loggedUser);
       setErrorMsg(null);
@@ -74,7 +125,25 @@ function App() {
           </div>
         )}
 
-        <form onSubmit={handleLogin} style={styles.form}>
+        <form onSubmit={handleLogin} style={styles.form} autoComplete="off">
+          {/* Active Warehouse selector */}
+          <div style={styles.formGroup}>
+            <label style={styles.label}>
+              <WarehouseIcon size={16} style={{ marginRight: "6px" }} />
+              Active Warehouse Area
+            </label>
+            <select
+              value={selectedWarehouseId}
+              onChange={(e) => setSelectedWarehouseId(e.target.value)}
+              style={styles.input}
+              required
+            >
+              {warehouses.map(w => (
+                <option key={w.id} value={w.id}>{w.name}</option>
+              ))}
+            </select>
+          </div>
+
           {/* Operational Email field */}
           <div style={styles.formGroup}>
             <label style={styles.label}>
@@ -88,6 +157,7 @@ function App() {
               placeholder="e.g. warehouse@claro.com"
               style={styles.input}
               required
+              autoComplete="off"
             />
           </div>
 
@@ -104,6 +174,7 @@ function App() {
               placeholder="••••••••••••"
               style={styles.input}
               required
+              autoComplete="new-password"
             />
           </div>
 

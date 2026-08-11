@@ -49,8 +49,8 @@ export const api = {
     return res.data;
   },
 
-  async getWmsChallans() {
-    const res = await client.get("/challans");
+  async getWmsChallans(warehouseId?: string) {
+    const res = await client.get("/challans", { params: { warehouseId } });
     return res.data;
   },
 
@@ -84,13 +84,35 @@ export const api = {
     return res.data;
   },
 
-  async getMaterialRequests() {
-    const res = await client.get("/material-requests");
+  async getMaterialRequests(warehouseId?: string) {
+    const res = await client.get("/material-requests", { params: { warehouseId } });
     return res.data;
   },
 
   async updateMaterialStatus(id: string, status: string) {
     const res = await client.patch(`/material-requests/${id}`, { status });
+    return res.data;
+  },
+
+  async getPartSerials(code: string) {
+    const res = await client.get(`/parts/${code}/serials`);
+    return res.data;
+  },
+
+  async adjustWmsStock(data: {
+    partCode: string;
+    serialNo?: string;
+    actionType: string;
+    field: string;
+    quantity: number;
+    reason: string;
+  }) {
+    const res = await client.post("/stock/adjust", data);
+    return res.data;
+  },
+
+  async getWmsAdjustments() {
+    const res = await client.get("/stock/adjustments");
     return res.data;
   }
 };

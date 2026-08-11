@@ -50,6 +50,7 @@ app.use((req: any, res, next) => {
 const router = express.Router();
 
 router.get("/parts", wmsController.getParts);
+router.get("/parts/:code/serials", wmsController.getPartSerials);
 router.get("/warehouses", wmsController.getWarehouses);
 router.get("/manufacturers", wmsController.getManufacturers);
 router.get("/farmers", wmsController.getFarmers);
@@ -65,6 +66,8 @@ router.get("/material-requests", wmsController.getMaterialRequests);
 router.patch("/material-requests/:id", wmsController.updateMaterialStatus);
 router.post("/material-requests/sync-row", wmsController.syncSingleRequest);
 router.post("/sync-requests", wmsController.syncRequests);
+router.post("/stock/adjust", wmsController.adjustStock);
+router.get("/stock/adjustments", wmsController.getAdjustments);
 
 app.use("/api/v1/wms", router);
 app.use("/api/v1", router);

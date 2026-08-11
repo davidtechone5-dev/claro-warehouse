@@ -8,11 +8,12 @@ generator client {
 }
 
 model User {
-  id        String              @id @default(uuid())
-  email     String              @unique
-  fullName  String              @map("full_name")
-  role      String              @default("Warehouse")
-  movements InventoryMovement[]
+  id          String                @id @default(uuid())
+  email       String                @unique
+  fullName    String                @map("full_name")
+  role        String                @default("Warehouse")
+  movements   InventoryMovement[]
+  adjustments InventoryAdjustment[]
 
   @@map("users")
 }
@@ -29,9 +30,10 @@ model Engineer {
 }
 
 model MasterInstallation {
-  id            String @id @default(uuid())
-  applicationId String @unique @map("application_id")
-  clientName    String @map("client_name")
+  id            String      @id @default(uuid())
+  applicationId String      @unique @map("application_id")
+  clientName    String      @map("client_name")
+  complaints    Complaint[]
 
   @@map("master_installations")
 }
@@ -155,10 +157,11 @@ model Challan {
 }
 
 model Complaint {
-  id            String    @id @default(uuid())
-  applicationId String    @unique @map("application_id")
-  ticketId      String    @unique @map("ticket_id")
-  ticket        Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  id            String              @id @default(uuid())
+  applicationId String              @unique @map("application_id")
+  ticketId      String              @unique @map("ticket_id")
+  ticket        Ticket              @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  masterInstallation MasterInstallation? @relation(fields: [applicationId], references: [applicationId], onDelete: SetNull)
 
   @@map("complaints")
 }
@@ -172,16 +175,32 @@ model Ticket {
 }
 
 model MaterialRequest {
-  id        String              @id @default(uuid())
-  ticketId  String              @map("ticket_id")
-  ticket    Ticket              @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  status    String              @default("PENDING") // PENDING, DISPATCHED
-  items     Json                @default("[]")
-  remarks   String?
-  engineerId String?            @map("engineer_id")
-  engineer  Engineer?           @relation(fields: [engineerId], references: [id], onDelete: SetNull)
-  createdAt DateTime            @default(now()) @map("created_at")
-  movements InventoryMovement[]
+  id          String              @id @default(uuid())
+  sourceRowId String?             @unique @map("source_row_id")
+  ticketId    String              @map("ticket_id")
+  ticket      Ticket              @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  status      String              @default("PENDING") // PENDING, DISPATCHED
+  items       Json                @default("[]")
+  remarks     String?
+  engineerId  String?            @map("engineer_id")
+  engineer    Engineer?           @relation(fields: [engineerId], references: [id], onDelete: SetNull)
+  createdAt   DateTime            @default(now()) @map("created_at")
+  movements   InventoryMovement[]
 
   @@map("material_requests")
+}
+
+model InventoryAdjustment {
+  id         String   @id @default(uuid())
+  partCode   String   @map("part_code")
+  serialNo   String?  @map("serial_no")
+  actionType String   @map("action_type") // ADD | REMOVE | CORRECT | WRITE_OFF
+  field      String   // fresh | faulty | crompton
+  quantity   Int
+  reason     String
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("inventory_adjustments")
 }

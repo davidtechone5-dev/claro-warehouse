@@ -209,5 +209,55 @@ export const wmsController = {
     } catch (err: any) {
       return res.status(500).json({ detail: err.message });
     }
+  },
+
+  async adjustStock(req: any, res: Response) {
+    const { partCode, serialNo, actionType, field, quantity, reason } = req.body;
+    if (!partCode || !actionType || !field || !reason) {
+      return res.status(400).json({ detail: "Missing required fields: partCode, actionType, field, reason." });
+    }
+
+    try {
+      const warehouseId = req.headers["x-warehouse-id"] as string;
+      if (!warehouseId) {
+        return res.status(400).json({ detail: "Missing selected warehouse context header." });
+      }
+
+      const userId = req.user?.id || "user-default-admin";
+
+      const adjustment = await wmsService.adjustStock({
+        partCode,
+        serialNo,
+        actionType,
+        field,
+        quantity: parseInt(quantity) || 1,
+        reason,
+        userId,
+        warehouseId
+      });
+
+      return res.status(200).json(adjustment);
+    } catch (err: any) {
+      return res.status(500).json({ detail: err.message });
+    }
+  },
+
+  async getPartSerials(req: Request, res: Response) {
+    const { code } = req.params;
+    try {
+      const serials = await wmsService.getPartSerials(code);
+      return res.status(200).json(serials);
+    } catch (err: any) {
+      return res.status(500).json({ detail: err.message });
+    }
+  },
+
+  async getAdjustments(req: Request, res: Response) {
+    try {
+      const adjustments = await wmsService.getAdjustments();
+      return res.status(200).json(adjustments);
+    } catch (err: any) {
+      return res.status(500).json({ detail: err.message });
+    }
   }
 };

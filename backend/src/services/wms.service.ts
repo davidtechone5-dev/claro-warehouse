@@ -867,7 +867,11 @@ export const wmsService = {
         },
         ticket: {
           include: {
-            complaint: true
+            complaint: {
+              include: {
+                masterInstallation: true
+              }
+            }
           }
         }
       },
@@ -876,173 +880,636 @@ export const wmsService = {
   },
 
   async updateMaterialStatus(id: string, status: string) {
-    return prisma.materialRequest.update({
-      where: { id },
-      data: { status }
-    });
-  },
+    const { warehouseContext } = await import("../db");
+    const activeSchema = warehouseContext.getStore() || "jalna";
 
+    const tryUpdateInSchema = async (schema: string) => {
+      return warehouseContext.run(schema, async () => {
+        const exists = await prisma.materialRequest.findUnique({
+          where: { id }
+        });
+        if (exists) {
+          return prisma.materialRequest.update({
+            where: { id },
+            data: { status }
+          });
+        }
+        return null;
+      });
+    };
+
+    if (activeSchema === "all") {
+      const schemas = ["jalna", "rajasthan", "haryana", "mp"];
+      for (const s of schemas) {
+        try {
+          const result = await tryUpdateInSchema(s);
+          if (result) return result;
+        } catch (e) {
+          console.error(`Error updating request in schema ${s}:`, e);
+        }
+      }
+      throw new Error(`Material Request with ID ${id} not found in any schema.`);
+    }
+
+    try {
+      const result = await tryUpdateInSchema(activeSchema);
+      if (result) return result;
+    } catch (e) {
+      console.error(`Error updating request in active schema ${activeSchema}:`, e);
+    }
+
+    // Fallback search in all other schemas
+    const schemas = ["jalna", "rajasthan", "haryana", "mp"].filter(s => s !== activeSchema);
+    for (const s of schemas) {
+      try {
+        const result = await tryUpdateInSchema(s);
+        if (result) return result;
+      } catch (e) {
+        console.error(`Error updating request in schema ${s} during fallback:`, e);
+      }
+    }
+
+    throw new Error(`Material Request with ID ${id} not found in any schema.`);
+  },
   async syncRequests(): Promise<{ newRequestsImported: number }> {
     const { warehouseContext } = await import("../db");
     const activeSchema = warehouseContext.getStore() || "jalna";
+
+    // If "all" is selected, sync all schemas in parallel
     if (activeSchema === "all") {
       const schemas = ["jalna", "rajasthan", "haryana", "mp"];
-      const results = await Promise.all(
-        schemas.map((schema: string) =>
-          warehouseContext.run(schema, () => wmsService.syncRequests())
-        )
+
+      const results = [];
+
+      for (const schema of schemas) {
+        console.log(`🏭 [Sync] Starting schema: ${schema}`);
+
+        const result = await warehouseContext.run(
+          schema,
+          () => wmsService.syncRequests()
+        );
+
+        results.push(result);
+
+        console.log(`✅ [Sync] Finished schema: ${schema}`);
+      }
+
+      const sum = results.reduce(
+        (acc: number, r: any) => acc + (r.newRequestsImported || 0),
+        0
       );
-      const sum = results.reduce((acc: number, r: any) => acc + (r.newRequestsImported || 0), 0);
+
       return { newRequestsImported: sum };
     }
 
-    const sheetUrl = "https://docs.google.com/spreadsheets/d/1kQkVIhbOgg3n4FHSia2Ow7Scm0AZLWHuMAwA-1cOsZY/export?format=csv&gid=193399218";
+    const sheetUrl =
+      "https://docs.google.com/spreadsheets/d/1kQkVIhbOgg3n4FHSia2Ow7Scm0AZLWHuMAwA-1cOsZY/export?format=csv&gid=193399218";
 
-    console.log(`🔄 [Sync] Fetching material requests for schema context: "${activeSchema}"`);
+    console.log(
+      `🔄 [Sync] Fetching material requests for schema context: "${activeSchema}"`
+    );
 
     try {
       console.log(`📥 [Sync] Sending fetch request to Google Sheets...`);
+
       const response = await fetch(sheetUrl);
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
       const csvText = await response.text();
-      console.log(`📥 [Sync] Sheet fetched successfully. Size: ${csvText.length} characters.`);
 
-      // Custom line parser to correctly process quoted strings with internal commas
+      console.log(
+        `📥 [Sync] Sheet fetched successfully. Size: ${csvText.length} characters.`
+      );
+
+      // Parse CSV
       const rows = parseCSV(csvText);
+
       console.log(`📊 [Sync] Parsed ${rows.length} rows from CSV.`);
-      if (rows.length < 2) return { newRequestsImported: 0 };
 
-      // Header row mapping checks
+      if (rows.length < 2) {
+        return { newRequestsImported: 0 };
+      }
+
+      const headers = rows[0].map(h => h.trim());
       const dataRows = rows.slice(1);
-      let count = 0;
 
-      // In-memory caches to minimize duplicate database network roundtrips
-      const engineerCache = new Map<string, string>(); // name.toLowerCase() -> engineerId
-      const ticketCache = new Map<string, string>();   // appId -> ticketId
+      const timestampIdx = headers.indexOf("Timestamp");
+      const warehouseCellIdx = headers.findIndex(h => h.includes("Warehouse") || h.includes("Requesting to"));
+      const appIdIdx = headers.findIndex(h => h.includes("Application ID") || h.includes("Saral ID"));
+      const pumpCapacityIdx = headers.indexOf("Pump Capacity");
+      const materialRequiredIdx = headers.findIndex(h => h.includes("Material Required") || h.includes("Material"));
+      const otherDetailIdx = headers.indexOf("Other");
+      const engineerNameIdx = headers.findIndex(h => h.includes("Service Engineer") || h.includes("Engineer"));
+      const quantityIdx = headers.indexOf("Quantity");
+      const dispatchCellIdx = headers.findIndex(h => h.includes("Dispatch Status"));
+      const syncIdIdx = headers.indexOf("Sync ID");
+
+      // ============================================================
+      // STEP 1: FILTER + PREPARE ROWS IN MEMORY
+      // ============================================================
+
+      type PreparedRow = {
+        timestamp: string;
+        cleanAppId: string;
+        cleanMaterial: string;
+        cleanEngName: string;
+        qty: number;
+        pumpCapacity: string;
+        otherDetail: string;
+        dispatchCell: string;
+        syncId: string;
+      };
+
+      const preparedRows: PreparedRow[] = [];
 
       for (const row of dataRows) {
-        if (row.length < 9) continue;
-
-        const timestamp = row[0];
-        const warehouseCell = row[1];
-        const appId = row[2];
-        const pumpCapacity = row[3];
-        const materialRequired = row[4];
-        const otherDetail = row[5];
-        const engineerName = row[6];
-        const quantityCell = row[8];
-        const dispatchCell = row[12] || "";
+        const appId = appIdIdx !== -1 ? row[appIdIdx] : "";
+        const materialRequired = materialRequiredIdx !== -1 ? row[materialRequiredIdx] : "";
+        const warehouseCell = warehouseCellIdx !== -1 ? row[warehouseCellIdx] : "";
 
         if (!appId || !materialRequired) continue;
 
-        // Skip rows that do not match the active schema context
         if (!matchesSchema(warehouseCell, activeSchema)) continue;
 
-        const qty = parseInt(quantityCell) || 1;
-        const cleanAppId = appId.trim();
-        const cleanMaterial = materialRequired.trim();
-        const cleanEngName = (engineerName || "Field Engineer").trim();
+        const timestamp = timestampIdx !== -1 ? row[timestampIdx] : "";
+        const pumpCapacity = pumpCapacityIdx !== -1 ? row[pumpCapacityIdx] : "";
+        const otherDetail = otherDetailIdx !== -1 ? row[otherDetailIdx] : "";
+        const engineerName = engineerNameIdx !== -1 ? row[engineerNameIdx] : "";
+        const quantityCell = quantityIdx !== -1 ? row[quantityIdx] : "";
+        const dispatchCell = dispatchCellIdx !== -1 ? row[dispatchCellIdx] : "";
+        const syncId = syncIdIdx !== -1 ? row[syncIdIdx] : "";
 
-        console.log(`🔎 [Sync] Found matching row for "${activeSchema}": AppId=${cleanAppId}, Eng=${cleanEngName}`);
+        preparedRows.push({
+          timestamp,
+          cleanAppId: appId.trim(),
+          cleanMaterial: materialRequired.trim(),
+          cleanEngName: (engineerName || "Field Engineer").trim(),
+          qty: parseInt(quantityCell) || 1,
+          pumpCapacity: pumpCapacity || "",
+          otherDetail: otherDetail || "",
+          dispatchCell,
+          syncId: syncId || ""
+        });
+      }
 
-        // 1. Resolve Engineer via cache/database
-        let engineerId = engineerCache.get(cleanEngName.toLowerCase());
-        if (!engineerId) {
-          console.log(`   [Sync] Cache miss. Querying engineer "${cleanEngName}"...`);
-          let engineer = await prisma.engineer.findFirst({
-            where: { name: { equals: cleanEngName, mode: "insensitive" } }
-          });
-          if (!engineer) {
-            const email = `${cleanEngName.toLowerCase().replace(/[^a-z0-9]/g, "")}@claro.com`;
-            engineer = await prisma.engineer.create({
-              data: {
-                name: cleanEngName,
-                email,
-                phone: "9999999999",
-                isActive: true
-              }
-            });
-            console.log(`   [Sync] Created new engineer: ${engineer.id}`);
+      console.log(
+        `📦 [Sync] Found ${preparedRows.length} matching rows for "${activeSchema}".`
+      );
+
+      if (preparedRows.length === 0) {
+        return { newRequestsImported: 0 };
+      }
+
+      // ============================================================
+      // STEP 2: COLLECT UNIQUE ENGINEERS + APP IDS
+      // ============================================================
+
+      const uniqueEngineerNames = Array.from(
+        new Set(preparedRows.map(row => row.cleanEngName))
+      );
+
+      const uniqueAppIds = Array.from(
+        new Set(preparedRows.map(row => row.cleanAppId))
+      );
+
+      console.log(
+        `🔎 [Sync] Unique engineers: ${uniqueEngineerNames.length} | Unique App IDs: ${uniqueAppIds.length}`
+      );
+
+      // ============================================================
+      // STEP 3: BULK LOAD ENGINEERS
+      // ============================================================
+
+      const existingEngineers = await prisma.engineer.findMany({
+        where: {
+          name: {
+            in: uniqueEngineerNames,
+            mode: "insensitive"
           }
-          engineerId = engineer.id;
-          engineerCache.set(cleanEngName.toLowerCase(), engineerId);
+        }
+      });
+
+      const engineerCache = new Map<string, string>();
+
+      for (const engineer of existingEngineers) {
+        engineerCache.set(
+          engineer.name.trim().toLowerCase(),
+          engineer.id
+        );
+      }
+
+      console.log(
+        `👷 [Sync] Loaded ${existingEngineers.length} existing engineers.`
+      );
+
+      // ============================================================
+      // STEP 4: CREATE MISSING ENGINEERS
+      // ============================================================
+
+      const missingEngineerNames = uniqueEngineerNames.filter(
+        name => !engineerCache.has(name.trim().toLowerCase())
+      );
+
+      if (missingEngineerNames.length > 0) {
+        console.log(
+          `👷 [Sync] Creating ${missingEngineerNames.length} missing engineers...`
+        );
+
+        // Small batches to avoid too many DB connections
+        const ENGINEER_BATCH_SIZE = 10;
+
+        for (
+          let i = 0;
+          i < missingEngineerNames.length;
+          i += ENGINEER_BATCH_SIZE
+        ) {
+          const batch = missingEngineerNames.slice(
+            i,
+            i + ENGINEER_BATCH_SIZE
+          );
+
+          const createdEngineers = await Promise.all(
+            batch.map(async engineerName => {
+              const cleanKey = engineerName
+                .trim()
+                .toLowerCase();
+
+              // Double-check to avoid duplicates
+              const existing = await prisma.engineer.findFirst({
+                where: {
+                  name: {
+                    equals: engineerName,
+                    mode: "insensitive"
+                  }
+                }
+              });
+
+              if (existing) {
+                return existing;
+              }
+
+              const email =
+                `${engineerName
+                  .toLowerCase()
+                  .replace(/[^a-z0-9]/g, "")}@claro.com`;
+
+              return prisma.engineer.create({
+                data: {
+                  name: engineerName,
+                  email,
+                  phone: "9999999999",
+                  isActive: true
+                }
+              });
+            })
+          );
+
+          for (const engineer of createdEngineers) {
+            engineerCache.set(
+              engineer.name.trim().toLowerCase(),
+              engineer.id
+            );
+          }
+        }
+      }
+
+      // ============================================================
+      // STEP 5: BULK LOAD COMPLAINTS / TICKETS
+      // ============================================================
+
+      const existingComplaints = await prisma.complaint.findMany({
+        where: {
+          applicationId: {
+            in: uniqueAppIds
+          }
+        },
+        select: {
+          applicationId: true,
+          ticketId: true
+        }
+      });
+
+      const ticketCache = new Map<string, string>();
+
+      for (const complaint of existingComplaints) {
+        ticketCache.set(
+          complaint.applicationId.trim(),
+          complaint.ticketId
+        );
+      }
+
+      console.log(
+        `🎫 [Sync] Loaded ${existingComplaints.length} existing tickets.`
+      );
+
+      // ============================================================
+      // STEP 7: ENSURE MASTER INSTALLATION RECORDS EXIST
+      // ============================================================
+
+      console.log(
+        `🌾 [Sync] Ensuring farmer/application records exist...`
+      );
+
+      await prisma.masterInstallation.createMany({
+        data: uniqueAppIds.map(applicationId => ({
+          applicationId,
+          clientName: `Farmer (${applicationId})`
+        })),
+        skipDuplicates: true
+      });
+
+      console.log(
+        `✅ [Sync] Farmer/application records ready.`
+      );
+
+      // ============================================================
+      // STEP 6: CREATE MISSING TICKETS / COMPLAINTS
+      // ============================================================
+
+      const missingAppIds = uniqueAppIds.filter(
+        appId => !ticketCache.has(appId)
+      );
+
+      if (missingAppIds.length > 0) {
+        console.log(
+          `🎫 [Sync] Creating ${missingAppIds.length} missing tickets...`
+        );
+
+        const TICKET_BATCH_SIZE = 10;
+
+        for (
+          let i = 0;
+          i < missingAppIds.length;
+          i += TICKET_BATCH_SIZE
+        ) {
+          const batch = missingAppIds.slice(
+            i,
+            i + TICKET_BATCH_SIZE
+          );
+
+          const createdItems = [];
+          for (const cleanAppId of batch) {
+            const existingComplaint =
+              await prisma.complaint.findUnique({
+                where: {
+                  applicationId: cleanAppId
+                }
+              });
+
+            if (existingComplaint) {
+              createdItems.push({
+                applicationId: cleanAppId,
+                ticketId: existingComplaint.ticketId
+              });
+              continue;
+            }
+
+            const ticket = await prisma.ticket.create({
+              data: {}
+            });
+
+            try {
+              const complaint =
+                await prisma.complaint.create({
+                  data: {
+                    applicationId: cleanAppId,
+                    ticketId: ticket.id
+                  }
+                });
+
+              createdItems.push({
+                applicationId: complaint.applicationId,
+                ticketId: ticket.id
+              });
+            } catch (error) {
+              const existingAfterConflict =
+                await prisma.complaint.findUnique({
+                  where: {
+                    applicationId: cleanAppId
+                  }
+                });
+
+              if (existingAfterConflict) {
+                try {
+                  await prisma.ticket.delete({
+                    where: {
+                      id: ticket.id
+                    }
+                  });
+                } catch {
+                  // Ignore cleanup failure
+                }
+
+                createdItems.push({
+                  applicationId: cleanAppId,
+                  ticketId: existingAfterConflict.ticketId
+                });
+              } else {
+                throw error;
+              }
+            }
+          }
+
+          for (const item of createdItems) {
+            ticketCache.set(
+              item.applicationId,
+              item.ticketId
+            );
+          }
+
+          console.log(
+            `✅ [Sync] Ticket batch ${Math.floor(i / TICKET_BATCH_SIZE) + 1
+            } complete.`
+          );
+        }
+      }
+
+
+
+      // ============================================================
+      // STEP 8: PREPARE MATERIAL REQUESTS
+      // ============================================================
+
+      const preparedRequests = preparedRows.map(row => {
+        const engineerId = engineerCache.get(
+          row.cleanEngName.trim().toLowerCase()
+        );
+
+        const ticketId = ticketCache.get(
+          row.cleanAppId
+        );
+
+        if (!engineerId) {
+          throw new Error(
+            `Engineer ID missing for "${row.cleanEngName}"`
+          );
         }
 
-        // 2. Resolve Complaint & Ticket via cache/database
-        let ticketId = ticketCache.get(cleanAppId);
         if (!ticketId) {
-          let complaint = await prisma.complaint.findUnique({
-            where: { applicationId: cleanAppId }
-          });
-          if (!complaint) {
-            const ticket = await prisma.ticket.create({ data: {} });
-            ticketId = ticket.id;
-            await prisma.complaint.create({
+          throw new Error(
+            `Ticket ID missing for Application ID "${row.cleanAppId}"`
+          );
+        }
+
+        let parsedTimestamp = new Date();
+
+        if (row.timestamp) {
+          const candidate = new Date(row.timestamp);
+
+          if (!isNaN(candidate.getTime())) {
+            parsedTimestamp = candidate;
+          }
+        }
+
+        const cleanedTime = row.timestamp
+          ? parsedTimestamp.getTime()
+          : "no-time";
+
+        const requestUniqueId =
+          `req-${row.cleanAppId}-${row.cleanMaterial.replace(
+            /[^a-zA-Z0-9]/g,
+            ""
+          )}-${cleanedTime}`.substring(0, 80);
+
+        const partNames = row.cleanMaterial
+          .split(",")
+          .map(part => part.trim())
+          .filter(Boolean);
+
+        const itemsJson = partNames.map(
+          (name, index) => ({
+            id: `item-${index}`,
+            itemName: name,
+            quantity: row.qty
+          })
+        );
+
+        const status =
+          row.dispatchCell.trim() !== ""
+            ? "DISPATCHED"
+            : "PENDING";
+
+        const remarks =
+          `${row.pumpCapacity || ""} - ${row.otherDetail || ""
+            }`.trim();
+
+        return {
+          requestUniqueId,
+          ticketId,
+          engineerId,
+          status,
+          remarks,
+          itemsJson,
+          createdAt: parsedTimestamp,
+          syncId: row.syncId
+        };
+      });
+
+      // ============================================================
+      // STEP 9: PROCESS MATERIAL REQUESTS IN PARALLEL BATCHES
+      // ============================================================
+
+      const MATERIAL_BATCH_SIZE = 15;
+
+      const totalBatches = Math.ceil(
+        preparedRequests.length /
+        MATERIAL_BATCH_SIZE
+      );
+
+      let count = 0;
+
+      console.log(
+        `🚀 [Sync] Starting ${totalBatches} material request batches...`
+      );
+
+      for (
+        let i = 0;
+        i < preparedRequests.length;
+        i += MATERIAL_BATCH_SIZE
+      ) {
+        const batch = preparedRequests.slice(
+          i,
+          i + MATERIAL_BATCH_SIZE
+        );
+
+        const batchNumber =
+          Math.floor(
+            i / MATERIAL_BATCH_SIZE
+          ) + 1;
+
+        console.log(
+          `📦 [Sync] Batch ${batchNumber}/${totalBatches} — processing ${batch.length} requests`
+        );
+
+        for (const request of batch) {
+          // Find existing request by Sync ID or fallback to legacy composite ID (id)
+          let existingRequest = null;
+          if (request.syncId) {
+            existingRequest = await prisma.materialRequest.findUnique({
+              where: { sourceRowId: request.syncId }
+            });
+          }
+          if (!existingRequest) {
+            existingRequest = await prisma.materialRequest.findUnique({
+              where: { id: request.requestUniqueId }
+            });
+          }
+
+          if (existingRequest) {
+            // Edit flow: Update the same physical record
+            await prisma.materialRequest.update({
+              where: { id: existingRequest.id },
               data: {
-                applicationId: cleanAppId,
-                ticketId: ticket.id
+                sourceRowId: request.syncId || existingRequest.sourceRowId, // Backfill Sync ID
+                status: request.status,
+                remarks: request.remarks,
+                items: request.itemsJson,
+                engineerId: request.engineerId
               }
             });
           } else {
-            ticketId = complaint.ticketId;
+            // Creation flow: Inserts a new request
+            await prisma.materialRequest.create({
+              data: {
+                id: request.requestUniqueId,
+                sourceRowId: request.syncId || null,
+                ticketId: request.ticketId,
+                status: request.status,
+                remarks: request.remarks,
+                items: request.itemsJson,
+                engineerId: request.engineerId,
+                createdAt: request.createdAt
+              }
+            });
           }
-          ticketCache.set(cleanAppId, ticketId);
         }
 
-        // 3. Resolve MasterInstallation (Farmer) if it doesn't exist
-        await prisma.masterInstallation.upsert({
-          where: { applicationId: cleanAppId },
-          update: {},
-          create: {
-            applicationId: cleanAppId,
-            clientName: `Farmer (${cleanAppId})`
-          }
-        });
+        count += batch.length;
 
-        // 4. Resolve Material Request unique ID and pre-populate JSON items array
-        const cleanedTime = timestamp ? new Date(timestamp).getTime() : "no-time";
-        const requestUniqueId = `req-${cleanAppId}-${cleanMaterial.replace(/[^a-zA-Z0-9]/g, "")}-${cleanedTime}`.substring(0, 80);
-
-        const partNames = cleanMaterial.split(",").map(p => p.trim());
-        const itemsJson = partNames.map((name, index) => ({
-          id: `item-${index}`,
-          itemName: name,
-          quantity: qty
-        }));
-
-        const status = dispatchCell.trim() !== "" ? "DISPATCHED" : "PENDING";
-        const remarks = `${pumpCapacity || ""} - ${otherDetail || ""}`.trim();
-
-        await prisma.materialRequest.upsert({
-          where: { id: requestUniqueId },
-          update: {
-            status,
-            remarks,
-            items: itemsJson,
-            engineerId: engineerId
-          },
-          create: {
-            id: requestUniqueId,
-            ticketId: ticketId!,
-            status,
-            remarks,
-            items: itemsJson,
-            engineerId: engineerId,
-            createdAt: timestamp ? new Date(timestamp) : new Date()
-          }
-        });
-
-        count++;
+        console.log(
+          `✅ [Sync] Batch ${batchNumber}/${totalBatches} complete — ${count}/${preparedRequests.length}`
+        );
       }
 
-      console.log(`✅ [Sync] Successfully synced ${count} material request entries for "${activeSchema}"`);
-      return { newRequestsImported: count };
+      console.log(
+        `🎉 [Sync] Successfully synced ${count} material request entries for "${activeSchema}"`
+      );
+
+      return {
+        newRequestsImported: count
+      };
     } catch (err: any) {
-      console.error("❌ [Sync] Error syncing Google Sheets:", err.message);
+      console.error(
+        "❌ [Sync] Error syncing Google Sheets:",
+        err.message
+      );
+
       throw err;
     }
   },
-
   async syncSingleRequest(data: any) {
     const warehouseCell = data["Requesting to - Warehouse"] || "";
     let targetSchema = "";
@@ -1066,6 +1533,7 @@ export const wmsService = {
       const engineerName = data["Service Engineer"] || data["Engineer"];
       const quantityCell = data["Quantity"];
       const dispatchCell = data["Dispatch Status (by Milan)"] || data["Dispatch Status"] || "";
+      const syncId = data["Sync ID"] || data["sourceRowId"] || data["syncId"];
 
       if (!appId || !materialRequired) {
         return { success: false, reason: "Missing Application ID or Material Required." };
@@ -1092,7 +1560,17 @@ export const wmsService = {
         });
       }
 
-      // 2. Resolve Complaint & Ticket
+      // 2. Resolve MasterInstallation (Farmer) - CRITICAL: Resolving first satisfies FK constraints!
+      await prisma.masterInstallation.upsert({
+        where: { applicationId: cleanAppId },
+        update: {},
+        create: {
+          applicationId: cleanAppId,
+          clientName: `Farmer (${cleanAppId})`
+        }
+      });
+
+      // 3. Resolve Complaint & Ticket
       let complaint = await prisma.complaint.findUnique({
         where: { applicationId: cleanAppId }
       });
@@ -1108,19 +1586,9 @@ export const wmsService = {
         });
       }
 
-      // 3. Resolve MasterInstallation (Farmer)
-      await prisma.masterInstallation.upsert({
-        where: { applicationId: cleanAppId },
-        update: {},
-        create: {
-          applicationId: cleanAppId,
-          clientName: `Farmer (${cleanAppId})`
-        }
-      });
-
       // 4. Resolve Material Request
       const cleanedTime = timestamp ? new Date(timestamp).getTime() : "no-time";
-      const requestUniqueId = `req-${cleanAppId}-${cleanMaterial.replace(/[^a-zA-Z0-9]/g, "")}-${cleanedTime}`.substring(0, 80);
+      const legacyUniqueId = `req-${cleanAppId}-${cleanMaterial.replace(/[^a-zA-Z0-9]/g, "")}-${cleanedTime}`.substring(0, 80);
       const partNames = cleanMaterial.split(",").map((p: string) => p.trim());
       const itemsJson = partNames.map((name: string, index: number) => ({
         id: `item-${index}`,
@@ -1131,26 +1599,220 @@ export const wmsService = {
       const status = dispatchCell.trim() !== "" ? "DISPATCHED" : "PENDING";
       const remarks = `${pumpCapacity || ""} - ${otherDetail || ""}`.trim();
 
-      const result = await prisma.materialRequest.upsert({
-        where: { id: requestUniqueId },
-        update: {
-          status,
-          remarks,
-          items: itemsJson,
-          engineerId: engineer.id
-        },
-        create: {
-          id: requestUniqueId,
-          ticketId: ticketId!,
-          status,
-          remarks,
-          items: itemsJson,
-          engineerId: engineer.id,
-          createdAt: timestamp ? new Date(timestamp) : new Date()
-        }
-      });
+      // Find existing request by Sync ID or fallback to legacy composite ID (id)
+      let existingRequest = null;
+      if (syncId) {
+        existingRequest = await prisma.materialRequest.findUnique({
+          where: { sourceRowId: syncId }
+        });
+      }
+      if (!existingRequest) {
+        existingRequest = await prisma.materialRequest.findUnique({
+          where: { id: legacyUniqueId }
+        });
+      }
+
+      let result;
+      if (existingRequest) {
+        // Edit flow: Update the same physical record
+        result = await prisma.materialRequest.update({
+          where: { id: existingRequest.id },
+          data: {
+            sourceRowId: syncId || existingRequest.sourceRowId, // Backfill Sync ID on legacy match
+            status,
+            remarks,
+            items: itemsJson,
+            engineerId: engineer.id
+          }
+        });
+      } else {
+        // Creation flow: Inserts a new request
+        result = await prisma.materialRequest.create({
+          data: {
+            id: legacyUniqueId,
+            sourceRowId: syncId || null,
+            ticketId: ticketId!,
+            status,
+            remarks,
+            items: itemsJson,
+            engineerId: engineer.id,
+            createdAt: timestamp ? new Date(timestamp) : new Date()
+          }
+        });
+      }
 
       return { success: true, id: result.id, targetSchema };
+    });
+  },
+
+  async adjustStock(data: {
+    partCode: string;
+    serialNo?: string;
+    actionType: string;
+    field: string;
+    quantity: number;
+    reason: string;
+    userId: string;
+    warehouseId: string;
+  }): Promise<any> {
+    const part = await prisma.part.findUnique({
+      where: { code: data.partCode }
+    });
+    if (!part) throw new Error(`Part with code ${data.partCode} not found.`);
+
+    const statusMap: Record<string, string> = {
+      fresh: "Fresh",
+      faulty: "Faulty-Received",
+      crompton: "At-Manufacturer"
+    };
+
+    const targetStatus = statusMap[data.field];
+    if (!targetStatus) throw new Error(`Invalid stock field ${data.field}`);
+
+    const qty = data.quantity;
+
+    if (part.serialTracked) {
+      if (!data.serialNo) {
+        throw new Error(`Serial number is required for serialized part ${part.code}.`);
+      }
+      const cleanSerial = data.serialNo.trim();
+
+      if (data.actionType === "ADD") {
+        const existing = await prisma.unitLedger.findUnique({
+          where: { serialNo: cleanSerial }
+        });
+        if (existing) {
+          throw new Error(`Serial number ${cleanSerial} already exists in database with status '${existing.status}'.`);
+        }
+
+        await prisma.unitLedger.create({
+          data: {
+            serialNo: cleanSerial,
+            partCode: part.code,
+            status: targetStatus,
+            condition: data.field === "fresh" ? "New" : undefined,
+            currentLocation: data.warehouseId
+          }
+        });
+      } else {
+        const existing = await prisma.unitLedger.findUnique({
+          where: { serialNo: cleanSerial }
+        });
+        if (!existing) {
+          throw new Error(`Serial number ${cleanSerial} not found in database.`);
+        }
+        if (existing.partCode !== part.code) {
+          throw new Error(`Serial number ${cleanSerial} belongs to part code ${existing.partCode}, not ${part.code}.`);
+        }
+
+        if (data.actionType === "WRITE_OFF" || data.actionType === "REMOVE") {
+          await prisma.unitLedger.update({
+            where: { serialNo: cleanSerial },
+            data: {
+              status: "Scrapped",
+              condition: "Scrapped",
+              currentLocation: "Written-off / Adjusted Out"
+            }
+          });
+        } else if (data.actionType === "CORRECT") {
+          await prisma.unitLedger.delete({
+            where: { serialNo: cleanSerial }
+          });
+        }
+      }
+
+      return prisma.inventoryAdjustment.create({
+        data: {
+          partCode: part.code,
+          serialNo: cleanSerial,
+          actionType: data.actionType,
+          field: data.field,
+          quantity: data.actionType === "ADD" ? 1 : -1,
+          reason: data.reason,
+          userId: data.userId
+        },
+        include: { user: true }
+      });
+
+    } else {
+      if (data.actionType === "ADD") {
+        const placeholders = [];
+        for (let i = 0; i < qty; i++) {
+          const dummySerial = `ADJ-${part.code}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`.toUpperCase();
+          placeholders.push({
+            serialNo: dummySerial,
+            partCode: part.code,
+            status: targetStatus,
+            condition: "New",
+            currentLocation: data.warehouseId
+          });
+        }
+
+        await prisma.unitLedger.createMany({
+          data: placeholders
+        });
+
+      } else {
+        const existingPlaceholders = await prisma.unitLedger.findMany({
+          where: {
+            partCode: part.code,
+            status: targetStatus,
+            currentLocation: data.warehouseId
+          },
+          take: qty
+        });
+
+        if (existingPlaceholders.length < qty) {
+          throw new Error(`Insufficient stock of non-serialized part ${part.code} in ${targetStatus}. Available: ${existingPlaceholders.length}, Requested: ${qty}.`);
+        }
+
+        const serialsToUpdate = existingPlaceholders.map(p => p.serialNo);
+
+        if (data.actionType === "WRITE_OFF" || data.actionType === "REMOVE") {
+          await prisma.unitLedger.updateMany({
+            where: { serialNo: { in: serialsToUpdate } },
+            data: {
+              status: "Scrapped",
+              condition: "Scrapped",
+              currentLocation: "Written-off / Adjusted Out"
+            }
+          });
+        } else {
+          await prisma.unitLedger.deleteMany({
+            where: { serialNo: { in: serialsToUpdate } }
+          });
+        }
+      }
+
+      return prisma.inventoryAdjustment.create({
+        data: {
+          partCode: part.code,
+          serialNo: null,
+          actionType: data.actionType,
+          field: data.field,
+          quantity: data.actionType === "ADD" ? qty : -qty,
+          reason: data.reason,
+          userId: data.userId
+        },
+        include: { user: true }
+      });
+    }
+  },
+
+  async getPartSerials(partCode: string): Promise<any> {
+    return prisma.unitLedger.findMany({
+      where: {
+        partCode,
+        status: { in: ["Fresh", "Faulty-Received", "At-Manufacturer"] }
+      },
+      orderBy: { serialNo: "asc" }
+    });
+  },
+
+  async getAdjustments(): Promise<any> {
+    return prisma.inventoryAdjustment.findMany({
+      include: { user: true },
+      orderBy: { createdAt: "desc" }
     });
   }
 };
@@ -1199,7 +1861,7 @@ function matchesSchema(warehouseCell: string, schema: string): boolean {
   const cell = (warehouseCell || "").toLowerCase();
   if (schema === "jalna") return cell.includes("jalna") || cell.includes("mh");
   if (schema === "rajasthan") return cell.includes("rajasthan") || cell.includes("rj");
-  if (schema === "haryana") return cell.includes("haryana") || cell.includes("hr") || cell.includes("fatehbad");
+  if (schema === "haryana") return cell.includes("haryana") || cell.includes("hariyana") || cell.includes("hr") || cell.includes("fatehbad") || cell.includes("fatehabad");
   if (schema === "mp") return cell.includes("mp") || cell.includes("vidisha");
   return false;
 }
