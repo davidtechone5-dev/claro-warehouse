@@ -126,6 +126,7 @@ export function Warehouse() {
     localStorage.setItem("claro_selected_warehouse", selectedWarehouseId);
 
     async function loadWarehouseData() {
+      setLoading(true);
       try {
         const stock = await api.getWmsStock(selectedWarehouseId);
         const movs = await api.getWmsMovements(selectedWarehouseId);
@@ -143,6 +144,8 @@ export function Warehouse() {
         }
       } catch (err) {
         console.error("Failed to load WMS data", err);
+      } finally {
+        setLoading(false);
       }
     }
 
@@ -595,6 +598,16 @@ export function Warehouse() {
         <div style={feedbackMsg.type === "success" ? styles.successAlert : styles.errorAlert}>
           {feedbackMsg.type === "success" ? <CheckCircle size={18} /> : <AlertTriangle size={18} />}
           <span>{feedbackMsg.text}</span>
+        </div>
+      )}
+
+      {/* Loading Overlay */}
+      {loading && (
+        <div style={styles.loadingOverlay}>
+          <div style={styles.spinner}></div>
+          <span style={{ marginTop: "1rem", color: "var(--text-muted)", fontWeight: "600", fontSize: "1rem" }}>
+            Loading Warehouse Data...
+          </span>
         </div>
       )}
 
@@ -2354,5 +2367,27 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "0.8rem",
     outline: "none",
     opacity: 0.7
+  },
+  loadingOverlay: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(255, 255, 255, 0.75)",
+    backdropFilter: "blur(4px)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 9999
+  },
+  spinner: {
+    width: "48px",
+    height: "48px",
+    border: "4px solid rgba(0, 0, 0, 0.08)",
+    borderLeftColor: "var(--primary)",
+    borderRadius: "50%",
+    animation: "spin 0.8s linear infinite"
   }
 };
