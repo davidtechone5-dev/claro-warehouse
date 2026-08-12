@@ -18,15 +18,16 @@ function getClient(): PrismaClient {
       if (baseUrl.includes("?")) {
         const urlObj = new URL(baseUrl);
         urlObj.searchParams.set("schema", normalizedSchema);
+        urlObj.searchParams.set("connection_limit", "2");
         connectionUrl = urlObj.toString();
       } else {
-        connectionUrl = `${baseUrl}?schema=${normalizedSchema}`;
+        connectionUrl = `${baseUrl}?schema=${normalizedSchema}&connection_limit=2`;
       }
     } catch (e) {
-      connectionUrl = `${baseUrl}?schema=${normalizedSchema}`;
+      connectionUrl = `${baseUrl}?schema=${normalizedSchema}&connection_limit=2`;
     }
 
-    console.log(`🔌 [DB] Instantiating PrismaClient for schema: "${normalizedSchema}"`);
+    console.log(`🔌 [DB] Instantiating PrismaClient for schema: "${normalizedSchema}" with connection_limit=2`);
     clients[normalizedSchema] = new PrismaClient({
       datasources: {
         db: {
