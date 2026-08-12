@@ -59,10 +59,24 @@ function App() {
       const selectedWh = warehouses.find(w => w.id === selectedWarehouseId);
       const warehouseName = selectedWh ? selectedWh.name : "All Warehouses";
 
+      let fullName = `Milan — Maintenance Lead (${warehouseName})`;
+      let emailAddress = "warehouse@claro.com";
+
+      if (selectedWarehouseId === "wh-rajasthan-2222") {
+        fullName = `Avinash — Maintenance Lead (${warehouseName})`;
+        emailAddress = "avinash@claro.com";
+      } else if (selectedWarehouseId === "wh-haryana-3333") {
+        fullName = `Avinash — Maintenance Lead (${warehouseName})`;
+        emailAddress = "avinash@claro.com";
+      } else if (selectedWarehouseId === "wh-mp-4444") {
+        fullName = `MP Maintenance Lead (${warehouseName})`;
+        emailAddress = "mp@claro.com";
+      }
+
       const loggedUser = {
         id: "user-admin",
-        email: "warehouse@claro.com",
-        fullName: `Milan — Maintenance Lead (${warehouseName})`,
+        email: emailAddress,
+        fullName: fullName,
         role: selectedWarehouseId === "all" ? "Warehouse Admin" : "Warehouse Operator",
         warehouseId: selectedWarehouseId,
         warehouseName: warehouseName
@@ -80,8 +94,8 @@ function App() {
 
       const loggedUser = {
         id: "user-haryana",
-        email: "haryana@claro.com",
-        fullName: "Haryana Maintenance Lead",
+        email: "avinash@claro.com",
+        fullName: "Avinash — Maintenance Lead",
         role: "Warehouse Operator",
         warehouseId: targetWhId,
         warehouseName: warehouseName

@@ -170,7 +170,7 @@ export const wmsController = {
   },
 
   async updateMaterialStatus(req: Request, res: Response) {
-    const { id } = req.params;
+    const id = req.params[0] || req.params.id;
     const { status } = req.body;
     if (!id || !status) {
       return res.status(400).json({ detail: "Missing request ID or status update value." });

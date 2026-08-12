@@ -43,17 +43,6 @@ export function Warehouse() {
   const [filteredRequests, setFilteredRequests] = useState<any[]>([]);
   const [requestFilter, setRequestFilter] = useState<string>("PENDING"); // PENDING, APPROVED, DISPATCHED, ALL
 
-  // Adjustment History & Form State
-  const [adjustments, setAdjustments] = useState<any[]>([]);
-  const [adjustModalOpen, setAdjustModalOpen] = useState(false);
-  const [adjustPart, setAdjustPart] = useState<any | null>(null);
-  const [adjustAction, setAdjustAction] = useState<"ADD" | "REMOVE" | "CORRECT" | "WRITE_OFF">("ADD");
-  const [adjustField, setAdjustField] = useState<"fresh" | "faulty" | "crompton">("fresh");
-  const [adjustQty, setAdjustQty] = useState<number>(1);
-  const [adjustSerial, setAdjustSerial] = useState<string>("");
-  const [adjustReason, setAdjustReason] = useState<string>("");
-  const [partSerials, setPartSerials] = useState<any[]>([]);
-  const [loadingSerials, setLoadingSerials] = useState(false);
   const [reqPage, setReqPage] = useState<number>(1);
   const reqsPerPage = 6;
 
@@ -143,14 +132,11 @@ export function Warehouse() {
         const chls = await api.getWmsChallans(selectedWarehouseId);
         const matReqs = await api.getMaterialRequests(selectedWarehouseId);
         const pRMAs = await api.getWmsPendingRMAs(selectedWarehouseId);
-        const adjs = await api.getWmsAdjustments();
-
         setStockData(stock);
         setMovements(movs);
         setChallans(chls);
         setMaterialRequests(matReqs);
         setPendingRMAs(pRMAs);
-        setAdjustments(adjs);
 
         if (chls.length > 0) {
           setSelectedChallan(chls[0]);
@@ -280,25 +266,34 @@ export function Warehouse() {
       };
     });
 
-    // Check that serial counts match quantities
+    // Check that serial counts match quantities (only for serialized parts)
     for (let i = 0; i < linesPayload.length; i++) {
       const line = linesPayload[i];
-      if (line.serials.length !== line.quantity) {
-        setFeedbackMsg({
-          type: "error",
-          text: `Line ${i + 1}: Registered ${line.serials.length} serial numbers but quantity says ${line.quantity}.`
-        });
-        setFormSubmitting(false);
-        return;
-      }
+      const matchedPart = parts.find(p => p.code === line.partCode);
+      const isSerialized = matchedPart ? matchedPart.serialTracked : true;
 
-      if (movementStage === 5 && conditionReceived === "Replaced — new serial" && Object.keys(line.replacedSerialsMap).length !== line.quantity) {
-        setFeedbackMsg({
-          type: "error",
-          text: `Line ${i + 1}: Under replacement condition, every new serial must map to an original faulty serial.`
-        });
-        setFormSubmitting(false);
-        return;
+      if (isSerialized) {
+        if (line.serials.length !== line.quantity) {
+          setFeedbackMsg({
+            type: "error",
+            text: `Line ${i + 1}: Registered ${line.serials.length} serial numbers but quantity says ${line.quantity}.`
+          });
+          setFormSubmitting(false);
+          return;
+        }
+
+        if (movementStage === 5 && conditionReceived === "Replaced — new serial" && Object.keys(line.replacedSerialsMap).length !== line.quantity) {
+          setFeedbackMsg({
+            type: "error",
+            text: `Line ${i + 1}: Under replacement condition, every new serial must map to an original faulty serial.`
+          });
+          setFormSubmitting(false);
+          return;
+        }
+      } else {
+        // Clear serials for non-serialized items to keep payload clean
+        line.serials = [];
+        line.replacedSerialsMap = {};
       }
     }
 
@@ -343,7 +338,8 @@ export function Warehouse() {
       }, 1500);
 
     } catch (err: any) {
-      setFeedbackMsg({ type: "error", text: err.message || "Failed to log inventory movement" });
+      const errMsg = err.response?.data?.detail || err.response?.data?.message || err.message || "Failed to log inventory movement";
+      setFeedbackMsg({ type: "error", text: errMsg });
     } finally {
       setFormSubmitting(false);
     }
@@ -413,71 +409,7 @@ export function Warehouse() {
     }
   };
 
-  const handleOpenAdjustModal = async (partItem: any) => {
-    setAdjustPart(partItem);
-    setAdjustAction("ADD");
-    setAdjustField("fresh");
-    setAdjustQty(1);
-    setAdjustSerial("");
-    setAdjustReason("");
-    setPartSerials([]);
 
-    const isSerialized = partItem.status === "Serialized";
-    if (isSerialized) {
-      setLoadingSerials(true);
-      try {
-        const serials = await api.getPartSerials(partItem.code);
-        setPartSerials(serials || []);
-        if (serials && serials.length > 0) {
-          setAdjustSerial(serials[0].serialNo);
-        }
-      } catch (err) {
-        console.error("Failed to load serial numbers for part", err);
-      } finally {
-        setLoadingSerials(false);
-      }
-    }
-
-    setAdjustModalOpen(true);
-  };
-
-  const handleSaveAdjustment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!adjustPart) return;
-
-    if (!adjustReason.trim()) {
-      alert("A mandatory reason is required for any manual inventory adjustment.");
-      return;
-    }
-
-    const isSerialized = adjustPart.status === "Serialized";
-    if (isSerialized && adjustAction !== "ADD" && !adjustSerial) {
-      alert("Please select a serial number to adjust.");
-      return;
-    }
-
-    try {
-      await api.adjustWmsStock({
-        partCode: adjustPart.code,
-        serialNo: isSerialized ? adjustSerial : undefined,
-        actionType: adjustAction,
-        field: adjustField,
-        quantity: isSerialized ? 1 : Number(adjustQty),
-        reason: adjustReason
-      });
-
-      const stock = await api.getWmsStock(selectedWarehouseId);
-      const adjs = await api.getWmsAdjustments();
-      setStockData(stock);
-      setAdjustments(adjs);
-
-      setAdjustModalOpen(false);
-      setFeedbackMsg({ type: "success", text: `Inventory adjusted successfully for part ${adjustPart.code}.` });
-      setTimeout(() => setFeedbackMsg(null), 3000);
-    } catch (err: any) {
-      alert("Adjustment failed: " + err.message);
-    }
-  };
 
   const updateRequestStatus = async (id: string, status: string) => {
     try {
@@ -652,12 +584,7 @@ export function Warehouse() {
           >
             🧾 Challans
           </button>
-          <button 
-            onClick={() => { setActiveTab("adjustments"); setFeedbackMsg(null); }}
-            style={activeTab === "adjustments" ? styles.tabActive : styles.tab}
-          >
-            📜 Adjustment History
-          </button>
+
         </div>
         <div style={styles.liveClock}>
           <span style={styles.clockPill}></span> System live &middot; <b style={{ fontFamily: "monospace" }}>{currentTimeStr}</b>
@@ -735,23 +662,8 @@ export function Warehouse() {
                       <td style={{ textAlign: "right", fontFamily: "monospace", color: "var(--color-assigned)" }}>
                         {item.atManufacturer}
                       </td>
-                      <td style={{ textAlign: "right" }}>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenAdjustModal(item)}
-                          style={{
-                            backgroundColor: "var(--primary)",
-                            color: "#FFFFFF",
-                            border: "none",
-                            borderRadius: "4px",
-                            padding: "0.25rem 0.6rem",
-                            fontSize: "0.75rem",
-                            fontWeight: "bold",
-                            cursor: "pointer"
-                          }}
-                        >
-                          ⚙️ Adjust
-                        </button>
+                      <td style={{ textAlign: "right", color: "var(--text-muted)" }}>
+                        &mdash;
                       </td>
                     </tr>
                   ))}
@@ -996,70 +908,7 @@ export function Warehouse() {
         </div>
       )}
 
-      {activeTab === "adjustments" && (
-        <div className="panel-card animate-fade-in" style={{ padding: "1.5rem" }}>
-          <div className="panel-card-header" style={{ borderBottom: "1px solid var(--border-color)", paddingBottom: "1rem", marginBottom: "1.5rem" }}>
-            <h2 style={{ fontSize: "1.2rem", margin: 0, fontWeight: 700 }}>Stock Adjustment History</h2>
-            <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-              Manual additions, corrections, and write-offs
-            </span>
-          </div>
 
-          <div className="custom-table-container">
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>Date &amp; Time</th>
-                  <th>User</th>
-                  <th>Part Code</th>
-                  <th>Serial Number</th>
-                  <th>Action</th>
-                  <th>Column</th>
-                  <th style={{ textAlign: "right" }}>Quantity</th>
-                  <th>Reason</th>
-                </tr>
-              </thead>
-              <tbody>
-                {adjustments.map((adj: any) => (
-                  <tr key={adj.id}>
-                    <td>
-                      {new Date(adj.createdAt).toLocaleString("en-IN", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit"
-                      })}
-                    </td>
-                    <td style={{ fontWeight: 600 }}>{adj.user?.fullName || "System"}</td>
-                    <td style={{ fontFamily: "monospace", fontWeight: 600 }}>{adj.partCode}</td>
-                    <td style={{ fontFamily: "monospace" }}>{adj.serialNo || "N/A (Non-serialized)"}</td>
-                    <td>
-                      <span className={`status-badge status-${adj.actionType.toLowerCase() === "add" ? "resolved" : adj.actionType.toLowerCase() === "write_off" || adj.actionType.toLowerCase() === "remove" ? "manual" : "reopened"}`}>
-                        {adj.actionType}
-                      </span>
-                    </td>
-                    <td>{adj.field.toUpperCase()}</td>
-                    <td style={{ textAlign: "right", fontFamily: "monospace", fontWeight: 700 }}>
-                      {adj.quantity > 0 ? `+${adj.quantity}` : adj.quantity}
-                    </td>
-                    <td style={{ color: "var(--text-muted)", fontSize: "0.85rem", maxWidth: "300px", wordBreak: "break-word" }}>
-                      {adj.reason}
-                    </td>
-                  </tr>
-                ))}
-                {adjustments.length === 0 && (
-                  <tr>
-                    <td colSpan={8} style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>
-                      No stock adjustments have been logged yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
       {/* Tab: Log Movement */}
       {activeTab === "entry" && (
@@ -1304,6 +1153,8 @@ export function Warehouse() {
               {formLines.map((line, index) => {
                 const enteredSerials = line.serialsText.split("\n").map(s => s.trim()).filter(s => s.length > 0);
                 const isMatching = enteredSerials.length === Number(line.quantity);
+                const selectedPart = parts.find(p => p.code === line.partCode);
+                const isSerialized = selectedPart ? selectedPart.serialTracked : true;
 
                 return (
                   <div key={index} style={{ ...styles.lineRow, gridTemplateColumns: gridTemplate }}>
@@ -1330,29 +1181,45 @@ export function Warehouse() {
                       />
                     </div>
                     <div>
-                      <textarea
-                        value={line.serialsText}
-                        onChange={(e) => handleLineChange(index, "serialsText", e.target.value)}
-                        placeholder="Paste new/repaired serial numbers here..."
-                        style={styles.textarea}
-                        required
-                      />
-                      <div style={isMatching ? styles.qtyCheckOk : styles.qtyCheckBad}>
-                        {enteredSerials.length} serials parsed &middot; {isMatching ? "matches quantity" : `quantity says ${line.quantity}`}
-                      </div>
+                      {isSerialized ? (
+                        <>
+                          <textarea
+                            value={line.serialsText}
+                            onChange={(e) => handleLineChange(index, "serialsText", e.target.value)}
+                            placeholder="Paste new/repaired serial numbers here..."
+                            style={styles.textarea}
+                            required
+                          />
+                          <div style={isMatching ? styles.qtyCheckOk : styles.qtyCheckBad}>
+                            {enteredSerials.length} serials parsed &middot; {isMatching ? "matches quantity" : `quantity says ${line.quantity}`}
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{ padding: "0.6rem 0.85rem", color: "var(--text-muted)", fontSize: "0.85rem", fontStyle: "italic", border: "1px dashed var(--border-color)", borderRadius: "6px", backgroundColor: "var(--bg-secondary)" }}>
+                          Non-serialized part &mdash; no serials required
+                        </div>
+                      )}
                     </div>
                     {showOriginalSerials && (
                       <div>
-                        <textarea
-                          value={line.replacedSerialsText}
-                          onChange={(e) => handleLineChange(index, "replacedSerialsText", e.target.value)}
-                          placeholder="Paste original faulty serials replaced (one per line)..."
-                          style={styles.textarea}
-                          required
-                        />
-                        <div style={line.replacedSerialsText.split("\n").map(s => s.trim()).filter(s => s.length > 0).length === Number(line.quantity) ? styles.qtyCheckOk : styles.qtyCheckBad}>
-                          {line.replacedSerialsText.split("\n").map(s => s.trim()).filter(s => s.length > 0).length} serials mapped
-                        </div>
+                        {isSerialized ? (
+                          <>
+                            <textarea
+                              value={line.replacedSerialsText}
+                              onChange={(e) => handleLineChange(index, "replacedSerialsText", e.target.value)}
+                              placeholder="Paste original faulty serials replaced (one per line)..."
+                              style={styles.textarea}
+                              required
+                            />
+                            <div style={line.replacedSerialsText.split("\n").map(s => s.trim()).filter(s => s.length > 0).length === Number(line.quantity) ? styles.qtyCheckOk : styles.qtyCheckBad}>
+                              {line.replacedSerialsText.split("\n").map(s => s.trim()).filter(s => s.length > 0).length} serials mapped
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{ padding: "0.6rem 0.85rem", color: "var(--text-muted)", fontSize: "0.85rem", fontStyle: "italic", border: "1px dashed var(--border-color)", borderRadius: "6px", backgroundColor: "var(--bg-secondary)" }}>
+                            Non-serialized
+                          </div>
+                        )}
                       </div>
                     )}
                     <div style={{ display: "flex", justifyContent: "center" }}>
@@ -1632,151 +1499,7 @@ export function Warehouse() {
         </div>
       )}
 
-      {adjustModalOpen && adjustPart && (
-        <div style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: "rgba(0, 0, 0, 0.5)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 1000
-        }}>
-          <div className="panel-card animate-fade-in" style={{
-            width: "480px",
-            backgroundColor: "#FFFFFF",
-            borderRadius: "8px",
-            padding: "2rem",
-            boxShadow: "0 10px 25px rgba(0, 0, 0, 0.1)"
-          }}>
-            <h3 style={{ fontSize: "1.25rem", margin: "0 0 0.5rem 0", fontWeight: "700" }}>Manual Stock Adjustment</h3>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "1.5rem" }}>
-              Part: <strong>{adjustPart.description}</strong> ({adjustPart.code})
-            </p>
 
-            <form onSubmit={handleSaveAdjustment} style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                <label style={{ fontSize: "0.82rem", fontWeight: "700", color: "#334155" }}>Action Type *</label>
-                <select
-                  value={adjustAction}
-                  onChange={(e: any) => setAdjustAction(e.target.value)}
-                  className="form-input"
-                  style={{ width: "100%", padding: "0.5rem", borderRadius: "4px" }}
-                  required
-                >
-                  <option value="ADD">Add Item (+) to Inventory</option>
-                  <option value="REMOVE">Remove Item (-) from Inventory</option>
-                  <option value="CORRECT">Correct Stock Error</option>
-                  <option value="WRITE_OFF">Write Off / Scrap Item</option>
-                </select>
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                <label style={{ fontSize: "0.82rem", fontWeight: "700", color: "#334155" }}>Stock Column *</label>
-                <select
-                  value={adjustField}
-                  onChange={(e: any) => setAdjustField(e.target.value)}
-                  className="form-input"
-                  style={{ width: "100%", padding: "0.5rem", borderRadius: "4px" }}
-                  required
-                >
-                  <option value="fresh">Fresh + Repaired</option>
-                  <option value="faulty">Faulty (on hand)</option>
-                  <option value="crompton">At Crompton Repair</option>
-                </select>
-              </div>
-
-              {adjustPart.status === "Serialized" ? (
-                // Serialized
-                adjustAction === "ADD" ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                    <label style={{ fontSize: "0.82rem", fontWeight: "700", color: "#334155" }}>New Serial Number *</label>
-                    <input
-                      type="text"
-                      value={adjustSerial}
-                      onChange={(e) => setAdjustSerial(e.target.value)}
-                      placeholder="e.g. JAL-PV-SN-050"
-                      className="form-input"
-                      style={{ width: "100%", padding: "0.5rem", borderRadius: "4px" }}
-                      required
-                    />
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                    <label style={{ fontSize: "0.82rem", fontWeight: "700", color: "#334155" }}>Select Serial Number *</label>
-                    {loadingSerials ? (
-                      <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Loading active serials...</span>
-                    ) : partSerials.length === 0 ? (
-                      <span style={{ fontSize: "0.85rem", color: "var(--color-manual)", fontWeight: "600" }}>
-                        No active serial numbers in stock to adjust.
-                      </span>
-                    ) : (
-                      <select
-                        value={adjustSerial}
-                        onChange={(e) => setAdjustSerial(e.target.value)}
-                        className="form-input"
-                        style={{ width: "100%", padding: "0.5rem", borderRadius: "4px" }}
-                        required
-                      >
-                        {partSerials.map(s => (
-                          <option key={s.serialNo} value={s.serialNo}>{s.serialNo} ({s.status})</option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-                )
-              ) : (
-                // Non-Serialized
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                  <label style={{ fontSize: "0.82rem", fontWeight: "700", color: "#334155" }}>Quantity *</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={adjustQty}
-                    onChange={(e) => setAdjustQty(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="form-input"
-                    style={{ width: "100%", padding: "0.5rem", borderRadius: "4px" }}
-                    required
-                  />
-                </div>
-              )}
-
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                <label style={{ fontSize: "0.82rem", fontWeight: "700", color: "#334155" }}>Reason for Adjustment *</label>
-                <textarea
-                  value={adjustReason}
-                  onChange={(e) => setAdjustReason(e.target.value)}
-                  placeholder="Mandatory explanation..."
-                  className="form-input"
-                  style={{ width: "100%", padding: "0.5rem", minHeight: "80px", resize: "vertical", borderRadius: "4px" }}
-                  required
-                />
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "1rem" }}>
-                <button
-                  type="button"
-                  onClick={() => setAdjustModalOpen(false)}
-                  className="custom-btn btn-secondary"
-                  style={{ padding: "0.5rem 1.25rem", fontSize: "0.88rem", cursor: "pointer" }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="custom-btn btn-primary"
-                  style={{ padding: "0.5rem 1.25rem", fontSize: "0.88rem", cursor: "pointer" }}
-                >
-                  Submit Adjustment
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
       </div>
     </div>
   );

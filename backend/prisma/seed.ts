@@ -5,34 +5,8 @@ dotenv.config();
 
 const schemas = ["jalna", "rajasthan", "haryana", "mp"];
 
-// Standard AP 2kW kit material list from the specification (Section 5)
+// Custom solar pump and motor SKUs specified for Haryana stock list
 const defaultParts = [
-  { code: "PV-330W", description: "Solar Panels 330W (Tier A)", category: "Panels", hpRating: "N/A", serialTracked: true, valuationAmount: 8500.00 },
-  { code: "INV-5HP", description: "Inverter Box 5HP w/ RMS (Tier A)", category: "Inverters", hpRating: "5HP", serialTracked: true, valuationAmount: 22000.00 },
-  { code: "ACDB-01", description: "AC Distribution Box (Tier B)", category: "Balance of Systems", hpRating: "N/A", serialTracked: false, valuationAmount: 2500.00 },
-  { code: "DCDB-01", description: "DC Distribution Box (Tier B)", category: "Balance of Systems", hpRating: "N/A", serialTracked: false, valuationAmount: 2800.00 },
-  { code: "LA-01", description: "Lightning Arrestor Kit (Tier B)", category: "Balance of Systems", hpRating: "N/A", serialTracked: false, valuationAmount: 1500.00 },
-  { code: "STRUCT-RAF", description: "Solar Structure Rafters (Tier D)", category: "Structures", hpRating: "N/A", serialTracked: false, valuationAmount: 4000.00 },
-  { code: "WIRE-DC4", description: "4 SQMM Solar DC Wire (Tier E)", category: "Wiring", hpRating: "N/A", serialTracked: false, valuationAmount: 3500.00 },
-  { code: "PCB-3HP", description: "PCB Controller Board 3HP (Tier A)", category: "Inverters", hpRating: "3HP", serialTracked: true, valuationAmount: 6000.00 },
-  { code: "PCB-5HP", description: "PCB Controller Board 5HP (Tier A)", category: "Inverters", hpRating: "5HP", serialTracked: true, valuationAmount: 7500.00 },
-  { code: "PCB-7.5HP", description: "PCB Controller Board 7.5HP (Tier A)", category: "Inverters", hpRating: "7.5HP", serialTracked: true, valuationAmount: 9000.00 },
-  { code: "PCB-10HP", description: "PCB Controller Board 10HP (Tier A)", category: "Inverters", hpRating: "10HP", serialTracked: true, valuationAmount: 11000.00 },
-  { code: "PUMP-3HP", description: "Submersible Pump 3HP (Tier A)", category: "Pumps", hpRating: "3HP", serialTracked: true, valuationAmount: 12000.00 },
-  { code: "PUMP-5HP", description: "Submersible Pump 5HP (Tier A)", category: "Pumps", hpRating: "5HP", serialTracked: true, valuationAmount: 15000.00 },
-  { code: "PUMP-7.5HP", description: "Submersible Pump 7.5HP (Tier A)", category: "Pumps", hpRating: "7.5HP", serialTracked: true, valuationAmount: 18000.00 },
-  { code: "PUMP-10HP", description: "Submersible Pump 10HP (Tier A)", category: "Pumps", hpRating: "10HP", serialTracked: true, valuationAmount: 21000.00 },
-  { code: "MOTOR-3HP", description: "Solar Pump Motor 3HP (Tier A)", category: "Motors", hpRating: "3HP", serialTracked: true, valuationAmount: 10000.00 },
-  { code: "MOTOR-5HP", description: "Solar Pump Motor 5HP (Tier A)", category: "Motors", hpRating: "5HP", serialTracked: true, valuationAmount: 12500.00 },
-  { code: "MOTOR-7.5HP", description: "Solar Pump Motor 7.5HP (Tier A)", category: "Motors", hpRating: "7.5HP", serialTracked: true, valuationAmount: 15000.00 },
-  { code: "MOTOR-10HP", description: "Solar Pump Motor 10HP (Tier A)", category: "Motors", hpRating: "10HP", serialTracked: true, valuationAmount: 18000.00 },
-  { code: "MC4-CON", description: "MC4 Connector Kit (10 pairs)", category: "Wiring", hpRating: "N/A", serialTracked: false, valuationAmount: 250.00 },
-  { code: "3PIN-CON", description: "3-Pin Waterproof Connector", category: "Wiring", hpRating: "N/A", serialTracked: false, valuationAmount: 450.00 },
-  { code: "TOGGLE-SW", description: "Heavy Duty Toggle Switch", category: "Balance of Systems", hpRating: "N/A", serialTracked: false, valuationAmount: 150.00 },
-  { code: "MCB-16A", description: "DC MCB 16A Double Pole", category: "Balance of Systems", hpRating: "N/A", serialTracked: false, valuationAmount: 850.00 },
-  { code: "RMS-DISP", description: "RMS LCD Display Unit", category: "Balance of Systems", hpRating: "N/A", serialTracked: true, valuationAmount: 3200.00 },
-  
-  // Custom solar pump and motor SKUs specified for Haryana stock list
   { code: "PUMP-7.5HP-DC-30M", description: "7.5HP DC 30M MONO SOLAR PUMP", category: "Pumps", hpRating: "7.5HP", serialTracked: true, valuationAmount: 18000.00 },
   { code: "PUMP-7.5HP-DC-50M", description: "7.5HP DC 50M MONO SOLAR PUMP", category: "Pumps", hpRating: "7.5HP", serialTracked: true, valuationAmount: 18500.00 },
   { code: "PUMP-7.5HP-DC-70M", description: "7.5HP DC 70M MONO SOLAR PUMP", category: "Pumps", hpRating: "7.5HP", serialTracked: true, valuationAmount: 19000.00 },
@@ -114,11 +88,21 @@ async function main() {
 
     try {
       // Clear existing data to prevent conflicts and key mismatches
-      await prisma.unitLedger.deleteMany({});
+      await prisma.challan.deleteMany({});
       await prisma.movementSerialNumber.deleteMany({});
       await prisma.inventoryMovementLine.deleteMany({});
       await prisma.inventoryMovement.deleteMany({});
+      await prisma.inventoryAdjustment.deleteMany({});
+      await prisma.materialRequest.deleteMany({});
+      await prisma.ticket.deleteMany({});
+      await prisma.complaint.deleteMany({});
+      await prisma.masterInstallation.deleteMany({});
+      await prisma.engineer.deleteMany({});
+      await prisma.unitLedger.deleteMany({});
+      await prisma.part.deleteMany({});
       await prisma.warehouse.deleteMany({});
+      await prisma.user.deleteMany({});
+      await prisma.manufacturer.deleteMany({});
 
       // 1. Seed User
       await prisma.user.upsert({
@@ -182,12 +166,7 @@ async function main() {
 
 
       // 7. Seed sample stock counts
-      const sampleLedgerItems = [
-        { serialNo: `${schema.toUpperCase()}-PV-SN-001`, partCode: "PV-330W", status: "Fresh", condition: "New", currentLocation: whId },
-        { serialNo: `${schema.toUpperCase()}-PV-SN-002`, partCode: "PV-330W", status: "Fresh", condition: "New", currentLocation: whId },
-        { serialNo: `${schema.toUpperCase()}-PV-SN-003`, partCode: "PV-330W", status: "Faulty-Received", condition: "New", currentLocation: whId },
-        { serialNo: `${schema.toUpperCase()}-INV-SN-101`, partCode: "INV-5HP", status: "Faulty-Received", condition: "New", currentLocation: whId }
-      ];
+      const sampleLedgerItems: any[] = [];
 
       // Seed initial starting stock levels from the Excel specification sheet
       const startingStocks = [

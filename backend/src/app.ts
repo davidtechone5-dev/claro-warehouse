@@ -23,14 +23,6 @@ export const WAREHOUSES = [
 
 // 1. Session and Database Schema context middleware
 app.use((req: any, res, next) => {
-  // Inject mock user session to satisfy wmsController auth check
-  req.user = {
-    id: "user-default-admin",
-    email: "milan@claro.com",
-    fullName: "Milan — Maintenance Lead",
-    role: "Warehouse"
-  };
-
   // Determine active warehouse schema from headers, query, or body
   const warehouseId = 
     req.headers["x-warehouse-id"] || 
@@ -39,6 +31,28 @@ app.use((req: any, res, next) => {
 
   const foundWh = WAREHOUSES.find(w => w.id === warehouseId);
   const activeSchema = foundWh ? foundWh.schema : "jalna"; // Default to Jalna
+
+  // Determine default user details based on schema context
+  let fullName = "Milan — Maintenance Lead";
+  let email = "milan@claro.com";
+  if (activeSchema === "rajasthan") {
+    fullName = "Avinash — Maintenance Lead";
+    email = "avinash@claro.com";
+  } else if (activeSchema === "haryana") {
+    fullName = "Avinash — Maintenance Lead";
+    email = "avinash@claro.com";
+  } else if (activeSchema === "mp") {
+    fullName = "MP Maintenance Lead";
+    email = "mp@claro.com";
+  }
+
+  // Inject mock user session to satisfy wmsController auth check
+  req.user = {
+    id: "user-default-admin",
+    email: email,
+    fullName: fullName,
+    role: "Warehouse"
+  };
 
   // Run subsequent middlewares/controllers in the active schema context
   warehouseContext.run(activeSchema, () => {
@@ -63,7 +77,7 @@ router.post("/movements", wmsController.logMovement);
 router.delete("/movements/:id", wmsController.deleteMovement);
 router.post("/clear-all", wmsController.clearAll);
 router.get("/material-requests", wmsController.getMaterialRequests);
-router.patch("/material-requests/:id", wmsController.updateMaterialStatus);
+router.patch("/material-requests/*", wmsController.updateMaterialStatus);
 router.post("/material-requests/sync-row", wmsController.syncSingleRequest);
 router.post("/sync-requests", wmsController.syncRequests);
 router.post("/stock/adjust", wmsController.adjustStock);
