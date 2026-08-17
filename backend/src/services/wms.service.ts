@@ -463,11 +463,15 @@ export const wmsService = {
             throw new Error(`Validation Error: Part ${part.code} has quantity ${line.quantity} but ${line.serials.length} serials were provided.`);
           }
 
+          const cleanSerials = line.serials.map(sn => sn.trim());
+          const existings = await tx.unitLedger.findMany({
+            where: { serialNo: { in: cleanSerials } }
+          });
+          const existingMap = new Map(existings.map(e => [e.serialNo, e]));
+
           for (const sn of line.serials) {
             const cleanSn = sn.trim();
-            const existing = await tx.unitLedger.findUnique({
-              where: { serialNo: cleanSn }
-            });
+            const existing = existingMap.get(cleanSn);
 
             if (data.stage === 1) {
               // Received from Manufacturer: serial shouldn't already be active in stock
@@ -929,6 +933,9 @@ export const wmsService = {
       }
 
       return movement;
+    }, {
+      maxWait: 15000,
+      timeout: 60000
     });
   },
 
@@ -1017,6 +1024,9 @@ export const wmsService = {
       return tx.inventoryMovement.delete({
         where: { id }
       });
+    }, {
+      maxWait: 15000,
+      timeout: 60000
     });
   },
 
@@ -1040,6 +1050,9 @@ export const wmsService = {
       await tx.materialRequest.deleteMany({});
       await tx.complaint.deleteMany({});
       await tx.ticket.deleteMany({});
+    }, {
+      maxWait: 15000,
+      timeout: 60000
     });
   },
 

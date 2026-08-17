@@ -31,6 +31,44 @@ function App() {
     }
   }, []);
 
+  // 12-minute inactivity auto-logout timer
+  useEffect(() => {
+    if (!user) return;
+
+    const INACTIVITY_LIMIT = 12 * 60 * 1000; // 12 minutes
+    let timeoutId: any;
+
+    const logoutUser = () => {
+      console.log("Inactivity limit reached. Logging out...");
+      localStorage.removeItem("claro_user");
+      window.location.reload();
+    };
+
+    const resetTimer = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(logoutUser, INACTIVITY_LIMIT);
+    };
+
+    // User activity events to listen for
+    const events = ["mousemove", "keypress", "scroll", "click", "touchstart"];
+
+    // Register event listeners
+    events.forEach(event => {
+      window.addEventListener(event, resetTimer);
+    });
+
+    // Initialize timer
+    resetTimer();
+
+    // Cleanup on unmount or user change
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      events.forEach(event => {
+        window.removeEventListener(event, resetTimer);
+      });
+    };
+  }, [user]);
+
   useEffect(() => {
     async function loadWarehouses() {
       try {
