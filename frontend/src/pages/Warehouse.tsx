@@ -43,7 +43,6 @@ export function Warehouse() {
   const [logStageFilter, setLogStageFilter] = useState<string>("ALL");
   const [logStartDate, setLogStartDate] = useState<string>("");
   const [logEndDate, setLogEndDate] = useState<string>("");
-  const [farmerSearchText, setFarmerSearchText] = useState<string>("");
   const [isFarmerDropdownOpen, setIsFarmerDropdownOpen] = useState<boolean>(false);
   const [farmerInputVal, setFarmerInputVal] = useState<string>("");
 
