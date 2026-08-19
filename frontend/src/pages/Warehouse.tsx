@@ -38,6 +38,15 @@ export function Warehouse() {
   const [challans, setChallans] = useState<any[]>([]);
   const [selectedChallan, setSelectedChallan] = useState<any>(null);
 
+  // Ledger log filters
+  const [logSearchQuery, setLogSearchQuery] = useState<string>("");
+  const [logStageFilter, setLogStageFilter] = useState<string>("ALL");
+  const [logStartDate, setLogStartDate] = useState<string>("");
+  const [logEndDate, setLogEndDate] = useState<string>("");
+  const [farmerSearchText, setFarmerSearchText] = useState<string>("");
+  const [isFarmerDropdownOpen, setIsFarmerDropdownOpen] = useState<boolean>(false);
+  const [farmerInputVal, setFarmerInputVal] = useState<string>("");
+
   // Material requests (from Google Forms)
   const [materialRequests, setMaterialRequests] = useState<any[]>([]);
   const [filteredRequests, setFilteredRequests] = useState<any[]>([]);
@@ -182,6 +191,16 @@ export function Warehouse() {
     }
   }, [movementStage, manufacturers, engineers, farmers, pendingRMAs]);
 
+  // Filtered farmers list
+  const filteredFarmers = farmers.filter((f) => {
+    if (!farmerInputVal.trim()) return true;
+    const q = farmerInputVal.toLowerCase();
+    return (
+      f.applicationId.toLowerCase().includes(q) ||
+      (f.clientName && f.clientName.toLowerCase().includes(q))
+    );
+  });
+
   if (loading || !selectedWarehouseId) {
     return <div style={styles.loading}>Loading Warehouse Management Interface...</div>;
   }
@@ -198,6 +217,7 @@ export function Warehouse() {
     const farmerAppId = req.ticket?.complaint?.applicationId || req.remarks?.match(/MK\d+/)?.[0] || "";
     const matchedFarmer = farmers.find(f => f.applicationId === farmerAppId);
     setReferenceNumber(matchedFarmer ? matchedFarmer.applicationId : (farmers[0]?.applicationId || ""));
+    setFarmerSearchText("");
 
     // Look up matching part from our database intelligently
     const reqItemName = req.items?.[0]?.itemName || "";
@@ -332,6 +352,7 @@ export function Warehouse() {
       setReferenceNumber("");
       setVehicleNumber("");
       setReportedFault("");
+      setFarmerSearchText("");
       setFormLines([{ partCode: parts[0]?.code || "", quantity: 1, serialsText: "", replacedSerialsText: "" }]);
       
       // Navigate to dashboard
@@ -369,6 +390,83 @@ export function Warehouse() {
       alert("Ledger entry removed and stock updated.");
     } catch (err: any) {
       alert("Error deleting movement: " + err.message);
+    }
+  };
+
+  // Export Movement Ledger to CSV
+  const handleExportLedgerToCSV = () => {
+    try {
+      if (filteredMovements.length === 0) {
+        alert("No movements found matching the current filters to export.");
+        return;
+      }
+
+      // CSV Headers
+      const headers = [
+        "Timestamp",
+        "Stage",
+        "Associated Party",
+        "Reference ID",
+        "Part Code",
+        "Part Description",
+        "Quantity",
+        "Serial Numbers",
+        "Logged By"
+      ];
+
+      // Convert rows
+      const rows = filteredMovements.flatMap((mov) => {
+        const timestamp = new Date(mov.timestamp).toISOString().replace("T", " ").substring(0, 19);
+        const stage = `Stage ${mov.type}`;
+        const party = mov.partyName || "";
+        const refId = mov.referenceNumber || "";
+        const loggedBy = mov.user?.fullName || "System";
+
+        return mov.lines.map((l: any) => {
+          const partCode = l.part?.code || "";
+          const partDesc = l.part?.description || "";
+          const qty = l.quantity || 0;
+          const serials = (l.serialNumbers || []).map((s: any) => s.serialNumber).join("; ");
+
+          return [
+            timestamp,
+            stage,
+            party,
+            refId,
+            partCode,
+            partDesc,
+            qty,
+            serials,
+            loggedBy
+          ].map(val => {
+            // Escape double quotes and wrap in quotes if contains comma or quote
+            const stringVal = String(val).replace(/"/g, '""');
+            return stringVal.includes(",") || stringVal.includes("\n") || stringVal.includes('"')
+              ? `"${stringVal}"`
+              : stringVal;
+          });
+        });
+      });
+
+      const csvContent = [
+        headers.join(","),
+        ...rows.map(row => row.join(","))
+      ].join("\n");
+
+      // Create download link
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      const whName = warehouses.find(w => w.id === selectedWarehouseId)?.name || selectedWarehouseId;
+      const formattedWhName = whName.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+      link.setAttribute("download", `wms_ledger_export_${formattedWhName}_${new Date().toISOString().substring(0, 10)}.csv`);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err: any) {
+      alert("Error exporting ledger: " + err.message);
     }
   };
 
@@ -444,7 +542,46 @@ export function Warehouse() {
   const gridTemplate = showOriginalSerials 
     ? "1.5fr 0.6fr 2fr 2fr 0.4fr" 
     : "2.5fr 0.8fr 3fr 0.4fr";
+  // Filter movements based on user inputs
+  const filteredMovements = movements.filter((mov) => {
+    // 1. Search Query Filter (partyName, referenceNumber, part code, or serials)
+    if (logSearchQuery.trim() !== "") {
+      const q = logSearchQuery.toLowerCase();
+      const partyMatch = mov.partyName?.toLowerCase().includes(q);
+      const refMatch = mov.referenceNumber?.toLowerCase().includes(q);
+      const partsOrSerialsMatch = mov.lines?.some((line: any) => 
+        line.part?.code?.toLowerCase().includes(q) ||
+        line.serialNumbers?.some((s: any) => s.serialNumber?.toLowerCase().includes(q))
+      );
+      if (!partyMatch && !refMatch && !partsOrSerialsMatch) {
+        return false;
+      }
+    }
 
+    // 2. Stage Filter
+    if (logStageFilter !== "ALL") {
+      if (mov.type !== Number(logStageFilter)) {
+        return false;
+      }
+    }
+
+    // 3. Date Filters
+    if (logStartDate !== "") {
+      const start = new Date(logStartDate);
+      start.setHours(0, 0, 0, 0);
+      const movDate = new Date(mov.timestamp);
+      if (movDate < start) return false;
+    }
+
+    if (logEndDate !== "") {
+      const end = new Date(logEndDate);
+      end.setHours(23, 59, 59, 999);
+      const movDate = new Date(mov.timestamp);
+      if (movDate > end) return false;
+    }
+
+    return true;
+  });
   return (
     <div style={{ display: "flex", minHeight: "100vh", backgroundColor: "var(--bg-main)" }}>
       {/* Sidebar container */}
@@ -1003,16 +1140,79 @@ export function Warehouse() {
               <>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Farmer Application ID * (Party Master)</label>
-                  <select 
-                    value={referenceNumber} 
-                    onChange={(e) => setReferenceNumber(e.target.value)} 
-                    style={styles.input}
-                    required
-                  >
-                    {farmers.map(f => (
-                      <option key={f.applicationId} value={f.applicationId}>{f.applicationId} ({f.clientName})</option>
-                    ))}
-                  </select>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type="text"
+                      value={isFarmerDropdownOpen ? farmerInputVal : (() => {
+                        const selectedFarmer = farmers.find(f => f.applicationId === referenceNumber);
+                        return selectedFarmer ? `${selectedFarmer.applicationId} (${selectedFarmer.clientName})` : "";
+                      })()}
+                      onChange={(e) => {
+                        if (!isFarmerDropdownOpen) setIsFarmerDropdownOpen(true);
+                        setFarmerInputVal(e.target.value);
+                      }}
+                      onFocus={() => {
+                        setIsFarmerDropdownOpen(true);
+                        setFarmerInputVal(""); // clear on focus to let them type
+                      }}
+                      onBlur={() => {
+                        // Small timeout to allow onMouseDown on option to register first
+                        setTimeout(() => {
+                          if (isFarmerDropdownOpen) {
+                            setReferenceNumber("");
+                            setFarmerInputVal("");
+                            setIsFarmerDropdownOpen(false);
+                          }
+                        }, 250);
+                      }}
+                      placeholder="Search and select farmer..."
+                      style={{ ...styles.input, width: "100%" }}
+                      required
+                    />
+                    {isFarmerDropdownOpen && (
+                      <div style={{
+                        position: "absolute",
+                        top: "100%",
+                        left: 0,
+                        right: 0,
+                        maxHeight: "220px",
+                        overflowY: "auto",
+                        backgroundColor: "var(--bg-panel)",
+                        border: "1px solid var(--border-color)",
+                        borderRadius: "8px",
+                        zIndex: 1000,
+                        boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+                        marginTop: "4px"
+                      }}>
+                        {filteredFarmers.map(f => (
+                          <div
+                            key={f.applicationId}
+                            onMouseDown={() => {
+                              setReferenceNumber(f.applicationId);
+                              setIsFarmerDropdownOpen(false);
+                              setFarmerInputVal("");
+                            }}
+                            className="dropdown-item"
+                            style={{
+                              padding: "0.6rem 0.8rem",
+                              cursor: "pointer",
+                              borderBottom: "1px solid var(--border-color)",
+                              fontSize: "0.85rem",
+                              color: "var(--text-main)",
+                              backgroundColor: referenceNumber === f.applicationId ? "var(--bg-secondary)" : "transparent"
+                            }}
+                          >
+                            <b>{f.applicationId}</b> &mdash; {f.clientName}
+                          </div>
+                        ))}
+                        {filteredFarmers.length === 0 && (
+                          <div style={{ padding: "0.6rem 0.8rem", color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                            No matching farmers found
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Service Engineer Name * (Party Master)</label>
@@ -1048,16 +1248,79 @@ export function Warehouse() {
                 </div>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Farmer / Site details (App ID) * (Party Master)</label>
-                  <select 
-                    value={referenceNumber} 
-                    onChange={(e) => setReferenceNumber(e.target.value)} 
-                    style={styles.input}
-                    required
-                  >
-                    {farmers.map(f => (
-                      <option key={f.applicationId} value={f.applicationId}>{f.applicationId} ({f.clientName})</option>
-                    ))}
-                  </select>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type="text"
+                      value={isFarmerDropdownOpen ? farmerInputVal : (() => {
+                        const selectedFarmer = farmers.find(f => f.applicationId === referenceNumber);
+                        return selectedFarmer ? `${selectedFarmer.applicationId} (${selectedFarmer.clientName})` : "";
+                      })()}
+                      onChange={(e) => {
+                        if (!isFarmerDropdownOpen) setIsFarmerDropdownOpen(true);
+                        setFarmerInputVal(e.target.value);
+                      }}
+                      onFocus={() => {
+                        setIsFarmerDropdownOpen(true);
+                        setFarmerInputVal(""); // clear on focus to let them type
+                      }}
+                      onBlur={() => {
+                        // Small timeout to allow onMouseDown on option to register first
+                        setTimeout(() => {
+                          if (isFarmerDropdownOpen) {
+                            setReferenceNumber("");
+                            setFarmerInputVal("");
+                            setIsFarmerDropdownOpen(false);
+                          }
+                        }, 250);
+                      }}
+                      placeholder="Search and select farmer..."
+                      style={{ ...styles.input, width: "100%" }}
+                      required
+                    />
+                    {isFarmerDropdownOpen && (
+                      <div style={{
+                        position: "absolute",
+                        top: "100%",
+                        left: 0,
+                        right: 0,
+                        maxHeight: "220px",
+                        overflowY: "auto",
+                        backgroundColor: "var(--bg-panel)",
+                        border: "1px solid var(--border-color)",
+                        borderRadius: "8px",
+                        zIndex: 1000,
+                        boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+                        marginTop: "4px"
+                      }}>
+                        {filteredFarmers.map(f => (
+                          <div
+                            key={f.applicationId}
+                            onMouseDown={() => {
+                              setReferenceNumber(f.applicationId);
+                              setIsFarmerDropdownOpen(false);
+                              setFarmerInputVal("");
+                            }}
+                            className="dropdown-item"
+                            style={{
+                              padding: "0.6rem 0.8rem",
+                              cursor: "pointer",
+                              borderBottom: "1px solid var(--border-color)",
+                              fontSize: "0.85rem",
+                              color: "var(--text-main)",
+                              backgroundColor: referenceNumber === f.applicationId ? "var(--bg-secondary)" : "transparent"
+                            }}
+                          >
+                            <b>{f.applicationId}</b> &mdash; {f.clientName}
+                          </div>
+                        ))}
+                        {filteredFarmers.length === 0 && (
+                          <div style={{ padding: "0.6rem 0.8rem", color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                            No matching farmers found
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Reported Fault</label>
@@ -1285,11 +1548,70 @@ export function Warehouse() {
       {/* Tab: Movement Log */}
       {activeTab === "log" && (
         <div className="panel-card">
-          <div className="panel-card-header" style={{ borderBottom: "1px solid var(--border-color)", paddingBottom: "1rem" }}>
-            <h2 style={{ fontSize: "1.1rem", margin: 0, fontWeight: 700 }}>Movement Ledger Registry</h2>
-            <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-              Full audit history for warehouse ledger
-            </span>
+          <div className="panel-card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "1rem" }}>
+            <div>
+              <h2 style={{ fontSize: "1.1rem", margin: 0, fontWeight: 700 }}>Movement Ledger Registry</h2>
+              <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                Full audit history for warehouse ledger
+              </span>
+            </div>
+            <button
+              onClick={handleExportLedgerToCSV}
+              className="custom-btn"
+              style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 1rem", fontSize: "0.85rem" }}
+            >
+              📥 Export to CSV
+            </button>
+          </div>
+
+          {/* Filtering Controls */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "1rem", padding: "1rem 0", borderBottom: "1px solid var(--border-color)", marginBottom: "1rem" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+              <label style={{ fontSize: "0.75rem", fontWeight: "600", color: "var(--text-muted)" }}>Search Party / Ref ID / Part / Serial</label>
+              <input
+                type="text"
+                placeholder="Search..."
+                value={logSearchQuery}
+                onChange={(e) => setLogSearchQuery(e.target.value)}
+                style={{ padding: "0.5rem", borderRadius: "4px", border: "1px solid var(--border-color)", backgroundColor: "var(--bg-card)", color: "var(--text-main)", fontSize: "0.85rem" }}
+              />
+            </div>
+            
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+              <label style={{ fontSize: "0.75rem", fontWeight: "600", color: "var(--text-muted)" }}>Filter by Cycle Stage</label>
+              <select
+                value={logStageFilter}
+                onChange={(e) => setLogStageFilter(e.target.value)}
+                style={{ padding: "0.5rem", borderRadius: "4px", border: "1px solid var(--border-color)", backgroundColor: "var(--bg-card)", color: "var(--text-main)", fontSize: "0.85rem" }}
+              >
+                <option value="ALL">All Stages</option>
+                <option value="1">Stage 1 - Inward from MFR</option>
+                <option value="2">Stage 2 - Outward to Farmer</option>
+                <option value="3">Stage 3 - Faulty Inward from SE</option>
+                <option value="4">Stage 4 - RMA Sent to MFR</option>
+                <option value="5">Stage 5 - Repaired/Replaced Inward</option>
+              </select>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+              <label style={{ fontSize: "0.75rem", fontWeight: "600", color: "var(--text-muted)" }}>Start Date</label>
+              <input
+                type="date"
+                value={logStartDate}
+                onChange={(e) => setLogStartDate(e.target.value)}
+                style={{ padding: "0.5rem", borderRadius: "4px", border: "1px solid var(--border-color)", backgroundColor: "var(--bg-card)", color: "var(--text-main)", fontSize: "0.85rem" }}
+              />
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+              <label style={{ fontSize: "0.75rem", fontWeight: "600", color: "var(--text-muted)" }}>End Date</label>
+              <input
+                type="date"
+                value={logEndDate}
+                onChange={(e) => setLogEndDate(e.target.value)}
+                style={{ padding: "0.5rem", borderRadius: "4px", border: "1px solid var(--border-color)", backgroundColor: "var(--bg-card)", color: "var(--text-main)", fontSize: "0.85rem" }}
+              />
+            </div>
           </div>
 
           <div className="custom-table-container">
@@ -1306,7 +1628,7 @@ export function Warehouse() {
                 </tr>
               </thead>
               <tbody>
-                {movements.map((mov) => (
+                {filteredMovements.map((mov) => (
                   <tr key={mov.id}>
                     <td style={{ fontFamily: "monospace", fontSize: "0.85rem" }}>
                       {new Date(mov.timestamp).toLocaleDateString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
@@ -1344,10 +1666,10 @@ export function Warehouse() {
                     </td>
                   </tr>
                 ))}
-                {movements.length === 0 && (
+                {filteredMovements.length === 0 && (
                   <tr>
                     <td colSpan={7} style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)" }}>
-                      No inventory movements logged for this warehouse ledger.
+                      No inventory movements match the selected filter criteria.
                     </td>
                   </tr>
                 )}

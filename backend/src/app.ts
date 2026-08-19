@@ -77,7 +77,7 @@ router.post("/movements", wmsController.logMovement);
 router.delete("/movements/:id", wmsController.deleteMovement);
 router.post("/clear-all", wmsController.clearAll);
 router.get("/material-requests", wmsController.getMaterialRequests);
-router.patch("/material-requests/*", wmsController.updateMaterialStatus);
+router.patch("/material-requests/:id", wmsController.updateMaterialStatus);
 router.post("/material-requests/sync-row", wmsController.syncSingleRequest);
 router.post("/sync-requests", wmsController.syncRequests);
 router.post("/stock/adjust", wmsController.adjustStock);

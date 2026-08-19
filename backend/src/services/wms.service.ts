@@ -250,13 +250,24 @@ export const wmsService = {
     // 3. Sent to farmers this week (Stage 2 movements in the last 7 days)
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-    const sentToFarmersThisWeek = await prisma.inventoryMovement.count({
+    const sentMovements = await prisma.inventoryMovement.findMany({
       where: {
         warehouseId,
         type: 2,
         timestamp: { gte: oneWeekAgo }
+      },
+      select: {
+        lines: {
+          select: {
+            quantity: true
+          }
+        }
       }
     });
+
+    const sentToFarmersThisWeek = sentMovements.reduce((acc, mov) => {
+      return acc + mov.lines.reduce((sum, line) => sum + line.quantity, 0);
+    }, 0);
 
     // 4. Stock by part (canonical catalog parts mapped with their ledger status counts)
     const parts = await this.getParts();
@@ -999,10 +1010,35 @@ export const wmsService = {
               }
             });
           } else {
-            // If there are no prior movements, this was Stage 1 (received), so we delete from ledger
-            await tx.unitLedger.delete({
-              where: { serialNo: sn.serialNumber }
-            });
+            // If there are no prior movements and this was Stage 1 (received), delete from ledger
+            if (movement.type === 1) {
+              await tx.unitLedger.delete({
+                where: { serialNo: sn.serialNumber }
+              });
+            } else {
+              // Revert to default status prior to this stage (e.g., if it was adjusted/seeded)
+              let defaultStatus = "Fresh";
+              let defaultLoc: string | null = movement.warehouseId;
+
+              if (movement.type === 3) {
+                defaultStatus = "Sent-to Farmer";
+                defaultLoc = movement.referenceNumber;
+              } else if (movement.type === 4) {
+                defaultStatus = "Faulty-Received";
+                defaultLoc = movement.warehouseId;
+              } else if (movement.type === 5) {
+                defaultStatus = "At-Manufacturer";
+                defaultLoc = movement.partyName;
+              }
+
+              await tx.unitLedger.update({
+                where: { serialNo: sn.serialNumber },
+                data: {
+                  status: defaultStatus,
+                  currentLocation: defaultLoc
+                }
+              });
+            }
           }
         }
       }
