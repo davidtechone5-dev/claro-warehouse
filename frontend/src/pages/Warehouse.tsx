@@ -216,7 +216,7 @@ export function Warehouse() {
     const farmerAppId = req.ticket?.complaint?.applicationId || req.remarks?.match(/MK\d+/)?.[0] || "";
     const matchedFarmer = farmers.find(f => f.applicationId === farmerAppId);
     setReferenceNumber(matchedFarmer ? matchedFarmer.applicationId : (farmers[0]?.applicationId || ""));
-    setFarmerSearchText("");
+    setFarmerInputVal("");
 
     // Look up matching part from our database intelligently
     const reqItemName = req.items?.[0]?.itemName || "";
@@ -351,7 +351,7 @@ export function Warehouse() {
       setReferenceNumber("");
       setVehicleNumber("");
       setReportedFault("");
-      setFarmerSearchText("");
+      setFarmerInputVal("");
       setFormLines([{ partCode: parts[0]?.code || "", quantity: 1, serialsText: "", replacedSerialsText: "" }]);
       
       // Navigate to dashboard
