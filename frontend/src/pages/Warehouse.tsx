@@ -664,6 +664,30 @@ export function Warehouse() {
               }
             </select>
           </div>
+
+          <button
+            onClick={() => {
+              localStorage.removeItem("claro_user");
+              window.location.reload();
+            }}
+            style={{
+              padding: "0.4rem 0.85rem",
+              backgroundColor: "#FEF2F2",
+              color: "#EF4444",
+              border: "1px solid #FCA5A5",
+              borderRadius: "6px",
+              fontSize: "0.85rem",
+              fontWeight: "700",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              marginLeft: "10px"
+            }}
+          >
+            <LogOut size={14} color="#EF4444" />
+            Sign Out
+          </button>
         </div>
       </div>
 
@@ -782,13 +806,13 @@ export function Warehouse() {
                         {item.code}
                       </td>
                       <td>{item.description}</td>
-                      <td style={{ textAlign: "right", fontFamily: "monospace", fontWeight: "700", color: "var(--color-resolved)" }}>
+                      <td style={{ textAlign: "right", fontFamily: "monospace", fontWeight: "800", fontSize: "1.2rem", color: "var(--color-resolved)" }}>
                         {item.fresh}
                       </td>
-                      <td style={{ textAlign: "right", fontFamily: "monospace", fontWeight: "700", color: "var(--color-manual)" }}>
+                      <td style={{ textAlign: "right", fontFamily: "monospace", fontWeight: "800", fontSize: "1.2rem", color: "var(--color-manual)" }}>
                         {item.faulty}
                       </td>
-                      <td style={{ textAlign: "right", fontFamily: "monospace", color: "var(--color-assigned)" }}>
+                      <td style={{ textAlign: "right", fontFamily: "monospace", fontWeight: "800", fontSize: "1.1rem", color: "var(--color-assigned)" }}>
                         {item.atManufacturer}
                       </td>
                       <td style={{ textAlign: "right", color: "var(--text-muted)" }}>

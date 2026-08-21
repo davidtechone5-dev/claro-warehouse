@@ -33,16 +33,16 @@ app.use((req: any, res, next) => {
   const activeSchema = foundWh ? foundWh.schema : "jalna"; // Default to Jalna
 
   // Determine default user details based on schema context
-  let fullName = "Milan — Maintenance Lead";
-  let email = "milan@claro.com";
+  let fullName = "Maharashtra Warehouse";
+  let email = "maharashtra@claro.com";
   if (activeSchema === "rajasthan") {
-    fullName = "Avinash — Maintenance Lead";
-    email = "avinash@claro.com";
+    fullName = "Rajasthan Warehouse";
+    email = "rajasthan@claro.com";
   } else if (activeSchema === "haryana") {
-    fullName = "Avinash — Maintenance Lead";
-    email = "avinash@claro.com";
+    fullName = "Haryana Warehouse";
+    email = "haryana@claro.com";
   } else if (activeSchema === "mp") {
-    fullName = "MP Maintenance Lead";
+    fullName = "MP Warehouse";
     email = "mp@claro.com";
   }
 

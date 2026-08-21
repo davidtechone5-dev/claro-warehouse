@@ -97,18 +97,21 @@ function App() {
       const selectedWh = warehouses.find(w => w.id === selectedWarehouseId);
       const warehouseName = selectedWh ? selectedWh.name : "All Warehouses";
 
-      let fullName = `Milan — Maintenance Lead (${warehouseName})`;
+      let fullName = "Admin Control";
       let emailAddress = "warehouse@claro.com";
 
       if (selectedWarehouseId === "wh-rajasthan-2222") {
-        fullName = `Avinash — Maintenance Lead (${warehouseName})`;
-        emailAddress = "avinash@claro.com";
+        fullName = "Rajasthan Warehouse";
+        emailAddress = "rajasthan@claro.com";
       } else if (selectedWarehouseId === "wh-haryana-3333") {
-        fullName = `Avinash — Maintenance Lead (${warehouseName})`;
-        emailAddress = "avinash@claro.com";
+        fullName = "Haryana Warehouse";
+        emailAddress = "haryana@claro.com";
       } else if (selectedWarehouseId === "wh-mp-4444") {
-        fullName = `MP Maintenance Lead (${warehouseName})`;
+        fullName = "MP Warehouse";
         emailAddress = "mp@claro.com";
+      } else if (selectedWarehouseId === "wh-jalna-1111") {
+        fullName = "Maharashtra Warehouse";
+        emailAddress = "maharashtra@claro.com";
       }
 
       const loggedUser = {
@@ -132,8 +135,8 @@ function App() {
 
       const loggedUser = {
         id: "user-haryana",
-        email: "avinash@claro.com",
-        fullName: "Avinash — Maintenance Lead",
+        email: "haryana@claro.com",
+        fullName: "Haryana Warehouse",
         role: "Warehouse Operator",
         warehouseId: targetWhId,
         warehouseName: warehouseName
@@ -150,8 +153,8 @@ function App() {
 
       const loggedUser = {
         id: "user-maharashtra",
-        email: "milan@claro.com",
-        fullName: "Milan — Maintenance Lead",
+        email: "maharashtra@claro.com",
+        fullName: "Maharashtra Warehouse",
         role: "Warehouse Operator",
         warehouseId: targetWhId,
         warehouseName: warehouseName
@@ -169,7 +172,7 @@ function App() {
       const loggedUser = {
         id: "user-mp",
         email: "mp@claro.com",
-        fullName: "MP Maintenance Lead",
+        fullName: "MP Warehouse",
         role: "Warehouse Operator",
         warehouseId: targetWhId,
         warehouseName: warehouseName
@@ -186,8 +189,8 @@ function App() {
 
       const loggedUser = {
         id: "user-rajasthan",
-        email: "avinash@claro.com",
-        fullName: "Avinash — Maintenance Lead",
+        email: "rajasthan@claro.com",
+        fullName: "Rajasthan Warehouse",
         role: "Warehouse Operator",
         warehouseId: targetWhId,
         warehouseName: warehouseName
