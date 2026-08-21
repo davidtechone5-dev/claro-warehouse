@@ -20,7 +20,7 @@ export function Warehouse() {
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("");
   const [parts, setParts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
+
 
   // Party Master dropdown data
   const [manufacturers, setManufacturers] = useState<any[]>([]);
@@ -495,19 +495,7 @@ export function Warehouse() {
     }
   };
 
-  const handleSyncLiveRequests = async () => {
-    setSyncing(true);
-    try {
-      const res = await api.syncWmsRequests();
-      alert(`Sync Complete! Imported ${res.newRequestsImported} new material requests.`);
-      const matReqs = await api.getMaterialRequests(selectedWarehouseId);
-      setMaterialRequests(matReqs);
-    } catch (err: any) {
-      alert("Error syncing sheets: " + err.message);
-    } finally {
-      setSyncing(false);
-    }
-  };
+
 
 
 
@@ -903,18 +891,8 @@ export function Warehouse() {
               </button>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-              {currentUser?.email === "warehouse@claro.com" && (
-                <button 
-                  type="button"
-                  disabled={syncing}
-                  onClick={handleSyncLiveRequests}
-                  style={syncing ? styles.syncBtnDisabled : styles.syncBtn}
-                >
-                  {syncing ? "🔄 Reconciling..." : "🔄 Admin Reconcile Sheets"}
-                </button>
-              )}
-              <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)" }}>
-                Synced with Google Sheet registry
+              <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "4px" }}>
+                🟢 Automatically synced with Google Sheet registry
               </p>
             </div>
           </div>

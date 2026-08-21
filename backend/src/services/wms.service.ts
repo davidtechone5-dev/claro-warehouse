@@ -1105,6 +1105,13 @@ export const wmsService = {
       return results.flat().sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }
 
+    // Auto-sync Google Sheets requests on fetch to keep records perfectly live
+    try {
+      await wmsService.syncRequests();
+    } catch (syncErr: any) {
+      console.error(`⚠️ [Auto-Sync] Failed to sync requests for schema "${activeSchema}":`, syncErr.message);
+    }
+
     return prisma.materialRequest.findMany({
       include: {
         engineer: {
