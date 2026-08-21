@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Warehouse } from "./pages/Warehouse.tsx";
-import { Mail, Key, ShieldAlert, Warehouse as WarehouseIcon } from "lucide-react";
+import { Mail, Key, ShieldAlert } from "lucide-react";
 import { api } from "./utils/api";
 
 const DEFAULT_WAREHOUSES = [
@@ -17,7 +17,7 @@ function App() {
   const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [warehouses, setWarehouses] = useState<any[]>(DEFAULT_WAREHOUSES);
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("all");
+  const [selectedWarehouseId] = useState<string>("all");
 
   useEffect(() => {
     const savedUser = localStorage.getItem("claro_user");
@@ -143,6 +143,60 @@ function App() {
       localStorage.setItem("claro_user", JSON.stringify(loggedUser));
       setUser(loggedUser);
       setErrorMsg(null);
+    } else if (cleanEmail === "maharashtra@claro.com" && (password === "claroenergy" || password === "claro_maharashtra")) {
+      const targetWhId = "wh-jalna-1111";
+      const selectedWh = warehouses.find(w => w.id === targetWhId);
+      const warehouseName = selectedWh ? selectedWh.name : "Jalna MH";
+
+      const loggedUser = {
+        id: "user-maharashtra",
+        email: "milan@claro.com",
+        fullName: "Milan — Maintenance Lead",
+        role: "Warehouse Operator",
+        warehouseId: targetWhId,
+        warehouseName: warehouseName
+      };
+
+      localStorage.setItem("claro_selected_warehouse", targetWhId);
+      localStorage.setItem("claro_user", JSON.stringify(loggedUser));
+      setUser(loggedUser);
+      setErrorMsg(null);
+    } else if (cleanEmail === "mp@claro.com" && (password === "claroenergy" || password === "claro_mp")) {
+      const targetWhId = "wh-mp-4444";
+      const selectedWh = warehouses.find(w => w.id === targetWhId);
+      const warehouseName = selectedWh ? selectedWh.name : "MP";
+
+      const loggedUser = {
+        id: "user-mp",
+        email: "mp@claro.com",
+        fullName: "MP Maintenance Lead",
+        role: "Warehouse Operator",
+        warehouseId: targetWhId,
+        warehouseName: warehouseName
+      };
+
+      localStorage.setItem("claro_selected_warehouse", targetWhId);
+      localStorage.setItem("claro_user", JSON.stringify(loggedUser));
+      setUser(loggedUser);
+      setErrorMsg(null);
+    } else if (cleanEmail === "rajasthan@claro.com" && (password === "claroenergy" || password === "claro_rajasthan")) {
+      const targetWhId = "wh-rajasthan-2222";
+      const selectedWh = warehouses.find(w => w.id === targetWhId);
+      const warehouseName = selectedWh ? selectedWh.name : "Rajasthan";
+
+      const loggedUser = {
+        id: "user-rajasthan",
+        email: "avinash@claro.com",
+        fullName: "Avinash — Maintenance Lead",
+        role: "Warehouse Operator",
+        warehouseId: targetWhId,
+        warehouseName: warehouseName
+      };
+
+      localStorage.setItem("claro_selected_warehouse", targetWhId);
+      localStorage.setItem("claro_user", JSON.stringify(loggedUser));
+      setUser(loggedUser);
+      setErrorMsg(null);
     } else {
       setErrorMsg("Invalid operational email or security password.");
     }
@@ -161,10 +215,7 @@ function App() {
       <div style={styles.card}>
         {/* Brand Logo Header */}
         <div style={styles.logoContainer}>
-          <div style={styles.logoCard}>
-            <span style={{ color: "#DC2626", fontWeight: "900", fontSize: "1.2rem", letterSpacing: "0.05em" }}>CLARO</span>
-            <span style={{ color: "#000", fontWeight: "700", fontSize: "0.8rem", letterSpacing: "0.1em", marginLeft: "4px" }}>ENERGY</span>
-          </div>
+          <img src="/logo.png" alt="Claro Energy Logo" style={{ height: "45px", objectFit: "contain" }} />
         </div>
 
         <h1 style={styles.title}>O&M Platform V2</h1>
@@ -178,23 +229,7 @@ function App() {
         )}
 
         <form onSubmit={handleLogin} style={styles.form} autoComplete="off">
-          {/* Active Warehouse selector */}
-          <div style={styles.formGroup}>
-            <label style={styles.label}>
-              <WarehouseIcon size={16} style={{ marginRight: "6px" }} />
-              Active Warehouse Area
-            </label>
-            <select
-              value={selectedWarehouseId}
-              onChange={(e) => setSelectedWarehouseId(e.target.value)}
-              style={styles.input}
-              required
-            >
-              {warehouses.map(w => (
-                <option key={w.id} value={w.id}>{w.name}</option>
-              ))}
-            </select>
-          </div>
+
 
           {/* Operational Email field */}
           <div style={styles.formGroup}>

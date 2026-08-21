@@ -586,16 +586,8 @@ export function Warehouse() {
       {/* Sidebar container */}
       <div style={styles.sidebar}>
         {/* Top: Brand Logo */}
-        <div style={styles.logoContainer}>
-          <div style={styles.logoCard}>
-            <div style={styles.logoTopHalf}>
-              <span style={styles.logoClaroText}>CLARO</span>
-              <span style={styles.logoRegistered}>®</span>
-            </div>
-            <div style={styles.logoBottomHalf}>
-              ENERGY
-            </div>
-          </div>
+        <div style={{ display: "flex", justifyContent: "center", width: "100%", padding: "1rem 0", marginBottom: "1.5rem" }}>
+          <img src="/logo.png" alt="Claro Energy Logo" style={{ height: "40px", objectFit: "contain" }} />
         </div>
 
         {/* Middle: Sidebar Menu */}

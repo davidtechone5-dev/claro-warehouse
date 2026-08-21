@@ -1133,45 +1133,107 @@ export const wmsService = {
         const exists = await prisma.materialRequest.findUnique({
           where: { id }
         });
-        if (exists) {
-          return prisma.materialRequest.update({
+        if (!exists) {
+          return { found: false };
+        }
+
+        let result;
+        if (status === "DISPATCHED" && exists.status !== "DISPATCHED") {
+          // Find the local warehouse
+          const warehouse = await prisma.warehouse.findFirst();
+          if (!warehouse) {
+            throw new Error("No warehouse registered in this schema context.");
+          }
+
+          // Find engineer name
+          const engineer = exists.engineerId 
+            ? await prisma.engineer.findUnique({ where: { id: exists.engineerId } })
+            : null;
+          const engineerName = engineer ? engineer.name : "Field Engineer";
+
+          // Find ticket / complaint
+          const ticket = await prisma.ticket.findUnique({
+            where: { id: exists.ticketId },
+            include: { complaint: true }
+          });
+          const applicationId = ticket?.complaint?.applicationId || "LEGACY-REF";
+
+          // Map request items to parts and serials
+          const items = (exists.items as any) || [];
+          const mappedLines = [];
+
+          for (const item of items) {
+            const itemName = item.itemName || "";
+            const quantity = item.quantity || 1;
+
+            // Resolve part
+            const part = await resolvePart(itemName);
+            if (!part) {
+              throw new Error("Could not map requested item \"" + itemName + "\" to any registered Part code/description.");
+            }
+
+            let serials: string[] = [];
+            if (part.serialTracked) {
+              // Find available Fresh serials at this warehouse
+              const freshUnits = await prisma.unitLedger.findMany({
+                where: {
+                  partCode: part.code,
+                  status: "Fresh",
+                  currentLocation: warehouse.id
+                },
+                take: quantity
+              });
+
+              if (freshUnits.length < quantity) {
+                throw new Error("Insufficient Fresh stock for part \"" + part.code + "\" in warehouse. Required: " + quantity + ", Available: " + freshUnits.length + ".");
+              }
+
+              serials = freshUnits.map(u => u.serialNo);
+            }
+
+            mappedLines.push({
+              partCode: part.code,
+              quantity,
+              serials
+            });
+          }
+
+          // Log Stage 2 Sent to farmer movement (this automatically transitions UnitLedger, creates movement and updates request status to DISPATCHED)
+          result = await wmsService.logMovement({
+            warehouseId: warehouse.id,
+            stage: 2,
+            partyName: engineerName,
+            referenceNumber: applicationId,
+            userId: "user-default-admin",
+            lines: mappedLines
+          });
+        } else {
+          result = await prisma.materialRequest.update({
             where: { id },
             data: { status }
           });
         }
-        return null;
+        return { found: true, result };
       });
     };
 
     if (activeSchema === "all") {
       const schemas = ["jalna", "rajasthan", "haryana", "mp"];
       for (const s of schemas) {
-        try {
-          const result = await tryUpdateInSchema(s);
-          if (result) return result;
-        } catch (e) {
-          console.error(`Error updating request in schema ${s}:`, e);
-        }
+        const res = await tryUpdateInSchema(s);
+        if (res.found) return res.result;
       }
       throw new Error(`Material Request with ID ${id} not found in any schema.`);
     }
 
-    try {
-      const result = await tryUpdateInSchema(activeSchema);
-      if (result) return result;
-    } catch (e) {
-      console.error(`Error updating request in active schema ${activeSchema}:`, e);
-    }
+    const res = await tryUpdateInSchema(activeSchema);
+    if (res.found) return res.result;
 
     // Fallback search in all other schemas
     const schemas = ["jalna", "rajasthan", "haryana", "mp"].filter(s => s !== activeSchema);
     for (const s of schemas) {
-      try {
-        const result = await tryUpdateInSchema(s);
-        if (result) return result;
-      } catch (e) {
-        console.error(`Error updating request in schema ${s} during fallback:`, e);
-      }
+      const resFallback = await tryUpdateInSchema(s);
+      if (resFallback.found) return resFallback.result;
     }
 
     throw new Error(`Material Request with ID ${id} not found in any schema.`);
@@ -2109,4 +2171,30 @@ function matchesSchema(warehouseCell: string, schema: string): boolean {
   if (schema === "haryana") return cell.includes("haryana") || cell.includes("hariyana") || cell.includes("hr") || cell.includes("fatehbad") || cell.includes("fatehabad");
   if (schema === "mp") return cell.includes("mp") || cell.includes("vidisha");
   return false;
+}
+
+async function resolvePart(itemName: string): Promise<any> {
+  const cleanName = itemName.trim().toLowerCase();
+
+  // 1. Try finding by exact code (case insensitive)
+  let part = await prisma.part.findFirst({
+    where: { code: { equals: itemName.trim(), mode: "insensitive" } }
+  });
+  if (part) return part;
+
+  // 2. Try finding by exact description (case insensitive)
+  part = await prisma.part.findFirst({
+    where: { description: { equals: itemName.trim(), mode: "insensitive" } }
+  });
+  if (part) return part;
+
+  // 3. Fallback to substring matching in description or code
+  const allParts = await prisma.part.findMany();
+  const matchedParts = allParts.filter((p: any) => 
+    p.description.toLowerCase().includes(cleanName) || 
+    cleanName.includes(p.description.toLowerCase()) ||
+    p.code.toLowerCase().includes(cleanName)
+  );
+
+  return matchedParts[0] || null;
 }
