@@ -11,7 +11,7 @@ const client = axios.create({
 
 // Axios interceptor to automatically inject the selected warehouse context header
 client.interceptors.request.use((config) => {
-  const selectedWhId = localStorage.getItem("claro_selected_warehouse") || "";
+  const selectedWhId = sessionStorage.getItem("claro_selected_warehouse") || "";
   if (selectedWhId) {
     config.headers["x-warehouse-id"] = selectedWhId;
   }

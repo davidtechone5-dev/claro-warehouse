@@ -1,4 +1,4 @@
-masterInstallation is being included from Complaint, but Prisma does not know a relation by that name.
+claro-warehousemasterInstallation is being included from Complaint, but Prisma does not know a relation by that name.
 sourceRowId is being used on MaterialRequest, but it is not defined in schema.prisma.
 inventoryAdjustment is being used, but there is no InventoryAdjustment model in the Prisma schema/client.
 

@@ -20,13 +20,13 @@ function App() {
   const [selectedWarehouseId] = useState<string>("all");
 
   useEffect(() => {
-    const savedUser = localStorage.getItem("claro_user");
+    const savedUser = sessionStorage.getItem("claro_user");
     if (savedUser) {
       try {
         setUser(JSON.parse(savedUser));
       } catch {
         // Clear corrupt session
-        localStorage.removeItem("claro_user");
+        sessionStorage.removeItem("claro_user");
       }
     }
   }, []);
@@ -40,7 +40,7 @@ function App() {
 
     const logoutUser = () => {
       console.log("Inactivity limit reached. Logging out...");
-      localStorage.removeItem("claro_user");
+      sessionStorage.removeItem("claro_user");
       window.location.reload();
     };
 
@@ -91,9 +91,14 @@ function App() {
     }
 
     const cleanEmail = email.toLowerCase().trim();
+    const isWarehouse = cleanEmail === "warehouse@claro.com";
+    const isHaryana = cleanEmail === "haryana@claro.com";
+    const isMaharashtra = cleanEmail === "maharashtra@claro.com";
+    const isMp = cleanEmail === "mp@claro.com";
+    const isRajasthan = cleanEmail === "rajasthan@claro.com";
 
     // Single Master Warehouse Admin account
-    if (cleanEmail === "warehouse@claro.com" && password === "claroenergy") {
+    if (isWarehouse && password === "claroenergy") {
       const selectedWh = warehouses.find(w => w.id === selectedWarehouseId);
       const warehouseName = selectedWh ? selectedWh.name : "All Warehouses";
 
@@ -124,11 +129,11 @@ function App() {
       };
 
       // Set active warehouse context header and save user session
-      localStorage.setItem("claro_selected_warehouse", selectedWarehouseId);
-      localStorage.setItem("claro_user", JSON.stringify(loggedUser));
+      sessionStorage.setItem("claro_selected_warehouse", selectedWarehouseId);
+      sessionStorage.setItem("claro_user", JSON.stringify(loggedUser));
       setUser(loggedUser);
       setErrorMsg(null);
-    } else if (cleanEmail === "haryana@claro.com" && (password === "claroenergy" || password === "claro_haryana")) {
+    } else if (isHaryana && (password === "claroenergy" || password === "claro_haryana")) {
       const targetWhId = "wh-haryana-3333";
       const selectedWh = warehouses.find(w => w.id === targetWhId);
       const warehouseName = selectedWh ? selectedWh.name : "Haryana";
@@ -142,11 +147,11 @@ function App() {
         warehouseName: warehouseName
       };
 
-      localStorage.setItem("claro_selected_warehouse", targetWhId);
-      localStorage.setItem("claro_user", JSON.stringify(loggedUser));
+      sessionStorage.setItem("claro_selected_warehouse", targetWhId);
+      sessionStorage.setItem("claro_user", JSON.stringify(loggedUser));
       setUser(loggedUser);
       setErrorMsg(null);
-    } else if (cleanEmail === "maharashtra@claro.com" && (password === "claroenergy" || password === "claro_maharashtra")) {
+    } else if (isMaharashtra && (password === "claroenergy" || password === "claro_maharashtra")) {
       const targetWhId = "wh-jalna-1111";
       const selectedWh = warehouses.find(w => w.id === targetWhId);
       const warehouseName = selectedWh ? selectedWh.name : "Jalna MH";
@@ -160,11 +165,11 @@ function App() {
         warehouseName: warehouseName
       };
 
-      localStorage.setItem("claro_selected_warehouse", targetWhId);
-      localStorage.setItem("claro_user", JSON.stringify(loggedUser));
+      sessionStorage.setItem("claro_selected_warehouse", targetWhId);
+      sessionStorage.setItem("claro_user", JSON.stringify(loggedUser));
       setUser(loggedUser);
       setErrorMsg(null);
-    } else if (cleanEmail === "mp@claro.com" && (password === "claroenergy" || password === "claro_mp")) {
+    } else if (isMp && (password === "claroenergy" || password === "claro_mp")) {
       const targetWhId = "wh-mp-4444";
       const selectedWh = warehouses.find(w => w.id === targetWhId);
       const warehouseName = selectedWh ? selectedWh.name : "MP";
@@ -178,11 +183,11 @@ function App() {
         warehouseName: warehouseName
       };
 
-      localStorage.setItem("claro_selected_warehouse", targetWhId);
-      localStorage.setItem("claro_user", JSON.stringify(loggedUser));
+      sessionStorage.setItem("claro_selected_warehouse", targetWhId);
+      sessionStorage.setItem("claro_user", JSON.stringify(loggedUser));
       setUser(loggedUser);
       setErrorMsg(null);
-    } else if (cleanEmail === "rajasthan@claro.com" && (password === "claroenergy" || password === "claro_rajasthan")) {
+    } else if (isRajasthan && (password === "claroenergy" || password === "claro_rajasthan")) {
       const targetWhId = "wh-rajasthan-2222";
       const selectedWh = warehouses.find(w => w.id === targetWhId);
       const warehouseName = selectedWh ? selectedWh.name : "Rajasthan";
@@ -196,8 +201,8 @@ function App() {
         warehouseName: warehouseName
       };
 
-      localStorage.setItem("claro_selected_warehouse", targetWhId);
-      localStorage.setItem("claro_user", JSON.stringify(loggedUser));
+      sessionStorage.setItem("claro_selected_warehouse", targetWhId);
+      sessionStorage.setItem("claro_user", JSON.stringify(loggedUser));
       setUser(loggedUser);
       setErrorMsg(null);
     } else {

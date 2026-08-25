@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { api } from "../utils/api";
-import { Plus, Trash2, CheckCircle, AlertTriangle, ArrowRight, Warehouse as WarehouseIcon, LogOut } from "lucide-react";
+import { Plus, Trash2, CheckCircle, AlertTriangle, ArrowRight, Warehouse as WarehouseIcon, LogOut, Package, ShieldAlert, Clock } from "lucide-react";
 
 export function Warehouse() {
   // Tab control: 'dashboard', 'requests', 'entry', 'log', 'challans'
   const [activeTab, setActiveTab] = useState<string>("dashboard");
+  const [prefilledRequestId, setPrefilledRequestId] = useState<string | null>(null);
 
   const [currentUser] = useState<any>(() => {
-    const saved = localStorage.getItem("claro_user");
+    const saved = sessionStorage.getItem("claro_user");
     try {
       return saved ? JSON.parse(saved) : null;
     } catch {
@@ -43,8 +44,7 @@ export function Warehouse() {
   const [logStageFilter, setLogStageFilter] = useState<string>("ALL");
   const [logStartDate, setLogStartDate] = useState<string>("");
   const [logEndDate, setLogEndDate] = useState<string>("");
-  const [isFarmerDropdownOpen, setIsFarmerDropdownOpen] = useState<boolean>(false);
-  const [farmerInputVal, setFarmerInputVal] = useState<string>("");
+
 
   // Material requests (from Google Forms)
   const [materialRequests, setMaterialRequests] = useState<any[]>([]);
@@ -109,7 +109,7 @@ export function Warehouse() {
           if (currentUser?.warehouseId) {
             activeWhId = currentUser.warehouseId;
           } else {
-            const savedWh = localStorage.getItem("claro_selected_warehouse");
+            const savedWh = sessionStorage.getItem("claro_selected_warehouse");
             const defaultWh = whs.find((w: any) => w.id === "all") || whs[0];
             activeWhId = savedWh && whs.some((w: any) => w.id === savedWh) ? savedWh : defaultWh.id;
           }
@@ -131,7 +131,7 @@ export function Warehouse() {
   useEffect(() => {
     if (!selectedWarehouseId) return;
 
-    localStorage.setItem("claro_selected_warehouse", selectedWarehouseId);
+    sessionStorage.setItem("claro_selected_warehouse", selectedWarehouseId);
 
     async function loadWarehouseData() {
       setLoading(true);
@@ -190,15 +190,7 @@ export function Warehouse() {
     }
   }, [movementStage, manufacturers, engineers, farmers, pendingRMAs]);
 
-  // Filtered farmers list
-  const filteredFarmers = farmers.filter((f) => {
-    if (!farmerInputVal.trim()) return true;
-    const q = farmerInputVal.toLowerCase();
-    return (
-      f.applicationId.toLowerCase().includes(q) ||
-      (f.clientName && f.clientName.toLowerCase().includes(q))
-    );
-  });
+
 
   if (loading || !selectedWarehouseId) {
     return <div style={styles.loading}>Loading Warehouse Management Interface...</div>;
@@ -206,17 +198,15 @@ export function Warehouse() {
 
   // Handle stage pre-fill from a material request
   const handlePreFillFromRequest = (req: any) => {
+    setPrefilledRequestId(req.id);
     setMovementStage(2); // Stage 2: Sent to farmer
     
     // Find matched engineer from party master
     const matchedEng = engineers.find(e => e.name.toLowerCase() === req.engineer?.name?.toLowerCase());
     setPartyName(matchedEng ? matchedEng.name : (engineers[0]?.name || ""));
 
-    // Prefill application ID or reference
     const farmerAppId = req.ticket?.complaint?.applicationId || req.remarks?.match(/MK\d+/)?.[0] || "";
-    const matchedFarmer = farmers.find(f => f.applicationId === farmerAppId);
-    setReferenceNumber(matchedFarmer ? matchedFarmer.applicationId : (farmers[0]?.applicationId || ""));
-    setFarmerInputVal("");
+    setReferenceNumber(farmerAppId);
 
     // Look up matching part from our database intelligently
     const reqItemName = req.items?.[0]?.itemName || "";
@@ -328,6 +318,7 @@ export function Warehouse() {
         vehicleNumber: movementStage === 1 ? vehicleNumber : undefined,
         reportedFault: movementStage === 3 ? reportedFault : undefined,
         conditionReceived: movementStage === 5 ? conditionReceived : undefined,
+        materialRequestId: prefilledRequestId || undefined,
         lines: linesPayload
       });
 
@@ -345,13 +336,13 @@ export function Warehouse() {
       setPendingRMAs(pRMAs);
 
       setFeedbackMsg({ type: "success", text: "Inventory movement logged successfully!" });
+      setPrefilledRequestId(null);
       
       // Reset form
       setPartyName("");
       setReferenceNumber("");
       setVehicleNumber("");
       setReportedFault("");
-      setFarmerInputVal("");
       setFormLines([{ partCode: parts[0]?.code || "", quantity: 1, serialsText: "", replacedSerialsText: "" }]);
       
       // Navigate to dashboard
@@ -571,25 +562,81 @@ export function Warehouse() {
   });
   return (
     <div style={{ display: "flex", minHeight: "100vh", backgroundColor: "var(--bg-main)" }}>
-      {/* Sidebar container */}
+      {/* Sidebar container - Black Switcher */}
       <div style={styles.sidebar}>
         {/* Top: Brand Logo */}
-        <div style={{ display: "flex", justifyContent: "center", width: "100%", padding: "1rem 0", marginBottom: "1.5rem" }}>
+        <div style={styles.logoContainer}>
           <img src="/logo.png" alt="Claro Energy Logo" style={{ height: "40px", objectFit: "contain" }} />
+        </div>
+
+        {/* Active Warehouse Selector (integrated into sidebar) */}
+        <div style={{ marginBottom: "1.5rem", padding: "0 0.5rem" }}>
+          <label style={{ fontSize: "0.75rem", color: "#A1A1AA", fontWeight: "600", display: "block", marginBottom: "6px" }}>ACTIVE LEDGER</label>
+          <select
+            value={selectedWarehouseId}
+            onChange={(e) => setSelectedWarehouseId(e.target.value)}
+            style={styles.sidebarSelect}
+            disabled={!!currentUser?.warehouseId}
+          >
+            {warehouses
+              .filter(w => !currentUser?.warehouseId || w.id === currentUser.warehouseId)
+              .map(w => (
+                <option key={w.id} value={w.id} style={{ color: "#000000" }}>{w.name}</option>
+              ))
+            }
+          </select>
         </div>
 
         {/* Middle: Sidebar Menu */}
         <div style={styles.sidebarMenu}>
-          <div style={styles.sidebarItemActive}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-              <WarehouseIcon size={22} color="#DC2626" />
-              <div style={{ display: "flex", flexDirection: "column", lineHeight: "1.2" }}>
-                <span style={{ fontSize: "0.95rem", fontWeight: "700" }}>WMS</span>
-                <span style={{ fontSize: "0.95rem", fontWeight: "700" }}>Dashboard</span>
-              </div>
+          <button 
+            onClick={() => { setActiveTab("dashboard"); setFeedbackMsg(null); }}
+            style={activeTab === "dashboard" ? styles.sidebarItemActive : styles.sidebarItem}
+          >
+            <span>📊 Live Stock</span>
+          </button>
+          
+          <button 
+            onClick={() => { setActiveTab("requests"); setFeedbackMsg(null); }}
+            style={activeTab === "requests" ? styles.sidebarItemActive : styles.sidebarItem}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+              <span>📩 Material Requests</span>
+              {materialRequests.filter(r => r.status === "PENDING").length > 0 && (
+                <span style={styles.sidebarBadge}>{materialRequests.filter(r => r.status === "PENDING").length}</span>
+              )}
             </div>
-            <span style={styles.sidebarBadgeActive}>ACTIVE</span>
+          </button>
+
+          <button 
+            onClick={() => { setActiveTab("entry"); setFeedbackMsg(null); }}
+            style={activeTab === "entry" ? styles.sidebarItemActive : styles.sidebarItem}
+          >
+            <span>✏️ Log Movement</span>
+          </button>
+
+          <button 
+            onClick={() => { setActiveTab("log"); setFeedbackMsg(null); }}
+            style={activeTab === "log" ? styles.sidebarItemActive : styles.sidebarItem}
+          >
+            <span>📋 Log History</span>
+          </button>
+
+          <button 
+            onClick={() => { setActiveTab("challans"); setFeedbackMsg(null); }}
+            style={activeTab === "challans" ? styles.sidebarItemActive : styles.sidebarItem}
+          >
+            <span>🧾 Challans</span>
+          </button>
+        </div>
+
+        {/* Clock & Footer details */}
+        <div style={{ padding: "0.75rem 0.5rem", fontSize: "0.75rem", color: "#A1A1AA", borderTop: "1px solid #27272A", marginBottom: "1rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#10B981" }}></span>
+            <span>System Live</span>
           </div>
+          <div style={{ marginTop: "4px", fontFamily: "monospace", fontSize: "0.8rem", color: "#E4E4E7" }}>{currentTimeStr}</div>
         </div>
 
         {/* Bottom: Profile & Sign Out */}
@@ -609,7 +656,7 @@ export function Warehouse() {
           </div>
           <button
             onClick={() => {
-              localStorage.removeItem("claro_user");
+              sessionStorage.removeItem("claro_user");
               window.location.reload();
             }}
             style={styles.signOutBtn}
@@ -624,115 +671,35 @@ export function Warehouse() {
       <div className="animate-fade-in" style={{ flex: 1, padding: "2rem 3rem", overflowY: "auto", paddingBottom: "2rem" }}>
         {/* Header bar */}
         <div style={styles.pageHeader}>
-        <div>
-          <h1 className="page-title" style={{ margin: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            Warehouse Ledger Management
-          </h1>
-          <p style={{ margin: "4px 0 0", color: "var(--text-muted)", fontSize: "0.9rem" }}>
-            Dynamically tracks real-time stock balances across regional ledgers.
-          </p>
-        </div>
-
-        <div style={styles.headerRight}>
-          {(currentUser?.role === "Warehouse" || currentUser?.role === "Warehouse Admin") && (
-            <button 
-              type="button" 
-              onClick={handleWipeAllWms}
-              style={styles.wipeBtn}
-            >
-              🔴 Reset Ledger Data
-            </button>
-          )}
-
-          <div style={styles.whSelectorLabel}>
-            <span>Active Warehouse Ledger:</span>
-            <select
-              value={selectedWarehouseId}
-              onChange={(e) => setSelectedWarehouseId(e.target.value)}
-              style={{
-                ...styles.whSelect,
-                cursor: currentUser?.warehouseId ? "not-allowed" : "pointer",
-                opacity: currentUser?.warehouseId ? 0.85 : 1
-              }}
-              disabled={!!currentUser?.warehouseId}
-            >
-              {warehouses
-                .filter(w => !currentUser?.warehouseId || w.id === currentUser.warehouseId)
-                .map(w => (
-                  <option key={w.id} value={w.id}>{w.name}</option>
-                ))
-              }
-            </select>
+          <div>
+            <h1 className="page-title" style={{ margin: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              {activeTab === "dashboard" && "Live Stock Ledger"}
+              {activeTab === "requests" && "Material Requests"}
+              {activeTab === "entry" && "Log Material Movement"}
+              {activeTab === "log" && "Log History"}
+              {activeTab === "challans" && "Challan Repository"}
+            </h1>
+            <p style={{ margin: "4px 0 0", color: "var(--text-muted)", fontSize: "0.9rem" }}>
+              {activeTab === "dashboard" && "Real-time stock balance calculated dynamically from regional ledgers."}
+              {activeTab === "requests" && "Pending site material dispatches synced live with Google Sheets."}
+              {activeTab === "entry" && "Record inventory stage movements and execute serial transitions."}
+              {activeTab === "log" && "Complete historical audit log of all registered ledger adjustments."}
+              {activeTab === "challans" && "Inspect and print generated transportation challans."}
+            </p>
           </div>
 
-          <button
-            onClick={() => {
-              localStorage.removeItem("claro_user");
-              window.location.reload();
-            }}
-            style={{
-              padding: "0.4rem 0.85rem",
-              backgroundColor: "#FEF2F2",
-              color: "#EF4444",
-              border: "1px solid #FCA5A5",
-              borderRadius: "6px",
-              fontSize: "0.85rem",
-              fontWeight: "700",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              marginLeft: "10px"
-            }}
-          >
-            <LogOut size={14} color="#EF4444" />
-            Sign Out
-          </button>
-        </div>
-      </div>
-
-      {/* Tabs navigation */}
-      <div style={styles.tabsContainer}>
-        <div style={styles.tabsLeft}>
-          <button 
-            onClick={() => { setActiveTab("dashboard"); setFeedbackMsg(null); }}
-            style={activeTab === "dashboard" ? styles.tabActive : styles.tab}
-          >
-            📊 Live Stock
-          </button>
-          <button 
-            onClick={() => { setActiveTab("requests"); setFeedbackMsg(null); }}
-            style={activeTab === "requests" ? styles.tabActive : styles.tab}
-          >
-            📩 Material Requests
-            {materialRequests.filter(r => r.status === "PENDING").length > 0 && (
-              <span style={styles.tabBadge}>{materialRequests.filter(r => r.status === "PENDING").length}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+            {(currentUser?.role === "Warehouse" || currentUser?.role === "Warehouse Admin") && (
+              <button 
+                type="button" 
+                onClick={handleWipeAllWms}
+                style={styles.wipeBtn}
+              >
+                🔴 Reset Ledger Data
+              </button>
             )}
-          </button>
-          <button 
-            onClick={() => { setActiveTab("entry"); setFeedbackMsg(null); }}
-            style={activeTab === "entry" ? styles.tabActive : styles.tab}
-          >
-            ✏️ Log Movement
-          </button>
-          <button 
-            onClick={() => { setActiveTab("log"); setFeedbackMsg(null); }}
-            style={activeTab === "log" ? styles.tabActive : styles.tab}
-          >
-            📋 Movement Log
-          </button>
-          <button 
-            onClick={() => { setActiveTab("challans"); setFeedbackMsg(null); }}
-            style={activeTab === "challans" ? styles.tabActive : styles.tab}
-          >
-            🧾 Challans
-          </button>
-
+          </div>
         </div>
-        <div style={styles.liveClock}>
-          <span style={styles.clockPill}></span> System live &middot; <b style={{ fontFamily: "monospace" }}>{currentTimeStr}</b>
-        </div>
-      </div>
 
       {feedbackMsg && (
         <div style={feedbackMsg.type === "success" ? styles.successAlert : styles.errorAlert}>
@@ -757,24 +724,36 @@ export function Warehouse() {
           {/* Stats metrics */}
           <div style={styles.metricsRow}>
             <div style={styles.metricCard}>
-              <span style={styles.metricLabel}>Fresh Units in Stock</span>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
+                <span style={styles.metricLabel}>Fresh Units in Stock</span>
+                <Package size={20} color="#10B981" />
+              </div>
               <span style={styles.metricValue}>{stockData.metrics?.freshUnits.toLocaleString() || 0}</span>
             </div>
             <div style={styles.metricCard}>
-              <span style={styles.metricLabel}>Faulty Units on Hand</span>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
+                <span style={styles.metricLabel}>Faulty Units on Hand</span>
+                <ShieldAlert size={20} color="#EF4444" />
+              </div>
               <span style={styles.metricValue}>{stockData.metrics?.faultyUnits.toLocaleString() || 0}</span>
             </div>
             <div style={{ ...styles.metricCard, ...(stockData.metrics?.rmaPending > 0 ? styles.metricAlert : {}) }}>
-              <span style={stockData.metrics?.rmaPending > 0 ? styles.metricLabelAlert : styles.metricLabel}>
-                RMA Pending &gt; 15 Days
-              </span>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
+                <span style={stockData.metrics?.rmaPending > 0 ? styles.metricLabelAlert : styles.metricLabel}>
+                  RMA Pending &gt; 15 Days
+                </span>
+                <Clock size={20} color={stockData.metrics?.rmaPending > 0 ? "#ea580c" : "#6B7280"} />
+              </div>
               <span style={stockData.metrics?.rmaPending > 0 ? styles.metricValueAlert : styles.metricValue}>
                 {stockData.metrics?.rmaPending || 0}
               </span>
             </div>
             <div style={styles.metricCard}>
-              <span style={styles.metricLabel}>Sent to Farmers (This Week)</span>
-              <span style={styles.metricValue}>{stockData.metrics?.sentToFarmersThisWeek || 0}</span>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
+                <span style={styles.metricLabel}>Sent to Farmers (This Week)</span>
+                <WarehouseIcon size={20} color="#3B82F6" />
+              </div>
+              <span style={stockData.metrics?.sentToFarmersThisWeek > 0 ? styles.metricValueActive : styles.metricValue}>{stockData.metrics?.sentToFarmersThisWeek || 0}</span>
             </div>
           </div>
 
@@ -923,69 +902,71 @@ export function Warehouse() {
 
           <div style={styles.requestsGrid}>
             {filteredRequests.slice((reqPage - 1) * reqsPerPage, reqPage * reqsPerPage).map((req) => (
-              <div key={req.id} className="panel-card" style={{ borderLeft: req.status === "PENDING" ? "4px solid var(--primary)" : "4px solid var(--color-resolved)" }}>
-                <div style={styles.reqCardHeader}>
-                  <div>
-                    <span style={styles.reqId}>REQ-{req.id.slice(0, 5).toUpperCase()}</span>
-                    {req.status === "PENDING" && <span style={styles.reqBadgeNew}>NEW</span>}
-                  </div>
-                  <span className={`status-badge status-${req.status.toLowerCase()}`}>{req.status}</span>
+              <div key={req.id} className="panel-card" style={{ borderLeft: req.status === "PENDING" ? "4px solid var(--primary)" : "4px solid var(--color-resolved)", padding: "1rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                <div style={styles.reqCardHeaderCompact}>
+                  <span style={styles.reqIdCompact}>REQ-{req.id.slice(0, 8).toUpperCase()}</span>
+                  <span className={`status-badge status-${req.status.toLowerCase()}`} style={{ fontSize: "0.75rem", padding: "1px 6px" }}>{req.status}</span>
                 </div>
 
-                <div style={styles.reqCardTitle}>
+                <div style={styles.reqCardTitleCompact}>
                   {req.items?.length > 0 ? (
                     req.items.map((item: any) => (
-                      <div key={item.id} style={{ fontWeight: "700", fontSize: "1.05rem" }}>
+                      <div key={item.id} style={{ fontWeight: "700", fontSize: "0.95rem" }}>
                         {item.itemName} &mdash; <span style={{ color: "var(--primary)" }}>Qty {item.quantity}</span>
                       </div>
                     ))
                   ) : (
-                    <div style={{ fontWeight: "700", fontSize: "1.05rem" }}>{req.remarks || "No details"}</div>
+                    <div style={{ fontWeight: "700", fontSize: "0.95rem" }}>{req.remarks || "No details"}</div>
                   )}
                 </div>
 
-                <div style={styles.reqMetaGrid}>
-                  <div>
-                    <span style={styles.reqMetaLabel}>Submitted</span>
-                    <span style={styles.reqMetaValue}>{new Date(req.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                <div style={styles.reqMetaGridCompact}>
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", fontWeight: "600", textTransform: "uppercase" }}>Site / Farmer</span>
+                    <span style={{ fontSize: "0.8rem", color: "var(--text-main)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={req.ticket?.complaint?.masterInstallation?.clientName || "N/A"}>
+                      {req.ticket?.complaint?.masterInstallation?.clientName || "N/A"}
+                    </span>
                   </div>
-                  <div>
-                    <span style={styles.reqMetaLabel}>Engineer</span>
-                    <span style={styles.reqMetaValue}>{req.engineer?.name || "N/A"}</span>
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", fontWeight: "600", textTransform: "uppercase" }}>Engineer</span>
+                    <span style={{ fontSize: "0.8rem", color: "var(--text-main)" }}>{req.engineer?.name || "N/A"}</span>
                   </div>
-                  <div>
-                    <span style={styles.reqMetaLabel}>Application ID</span>
-                    <span style={styles.reqMetaValue}>{req.ticket?.complaint?.applicationId || "N/A"}</span>
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", fontWeight: "600", textTransform: "uppercase" }}>App ID</span>
+                    <span style={{ fontSize: "0.8rem", color: "var(--text-main)" }}>{req.ticket?.complaint?.applicationId || "N/A"}</span>
                   </div>
-                  <div>
-                    <span style={styles.reqMetaLabel}>Village / Site</span>
-                    <span style={styles.reqMetaValue}>{req.ticket?.complaint?.masterInstallation?.clientName || "N/A"}</span>
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", fontWeight: "600", textTransform: "uppercase" }}>Submitted</span>
+                    <span style={{ fontSize: "0.8rem", color: "var(--text-main)" }}>
+                      {new Date(req.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                    </span>
                   </div>
                 </div>
 
-                <div style={styles.reqCardActions}>
+                <div style={styles.reqCardActionsCompact}>
                   {req.status !== "DISPATCHED" ? (
                     <>
                       <select 
                         value={req.status} 
                         onChange={(e) => updateRequestStatus(req.id, e.target.value)}
-                        style={styles.reqActionSelect}
+                        style={styles.reqActionSelectCompact}
                       >
-                        <option value="PENDING">Pending Approval</option>
-                        <option value="APPROVED">Approved - Pending Dispatch</option>
+                        <option value="PENDING">Pending</option>
+                        <option value="APPROVED">Approved</option>
                         <option value="DISPATCHED">Dispatched</option>
                       </select>
                       <button 
                         onClick={() => handlePreFillFromRequest(req)}
                         className="custom-btn" 
-                        style={styles.reqActionBtn}
+                        style={styles.reqActionBtnCompact}
+                        title="Dispatch this request"
                       >
-                        Log as Sent to Farmer <ArrowRight size={14} />
+                        Dispatch <ArrowRight size={12} />
                       </button>
                     </>
                   ) : (
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--color-resolved)", fontWeight: "600", fontSize: "0.9rem" }}>
-                      <CheckCircle size={16} /> Dispatched &amp; logged to inventory
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", color: "var(--color-resolved)", fontWeight: "600", fontSize: "0.8rem" }}>
+                      <CheckCircle size={14} /> Dispatched &amp; logged
                     </div>
                   )}
                 </div>
@@ -1133,79 +1114,15 @@ export function Warehouse() {
               <>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Farmer Application ID * (Party Master)</label>
-                  <div style={{ position: "relative" }}>
-                    <input
-                      type="text"
-                      value={isFarmerDropdownOpen ? farmerInputVal : (() => {
-                        const selectedFarmer = farmers.find(f => f.applicationId === referenceNumber);
-                        return selectedFarmer ? `${selectedFarmer.applicationId} (${selectedFarmer.clientName})` : "";
-                      })()}
-                      onChange={(e) => {
-                        if (!isFarmerDropdownOpen) setIsFarmerDropdownOpen(true);
-                        setFarmerInputVal(e.target.value);
-                      }}
-                      onFocus={() => {
-                        setIsFarmerDropdownOpen(true);
-                        setFarmerInputVal(""); // clear on focus to let them type
-                      }}
-                      onBlur={() => {
-                        // Small timeout to allow onMouseDown on option to register first
-                        setTimeout(() => {
-                          if (isFarmerDropdownOpen) {
-                            setReferenceNumber("");
-                            setFarmerInputVal("");
-                            setIsFarmerDropdownOpen(false);
-                          }
-                        }, 250);
-                      }}
-                      placeholder="Search and select farmer..."
-                      style={{ ...styles.input, width: "100%" }}
-                      required
-                    />
-                    {isFarmerDropdownOpen && (
-                      <div style={{
-                        position: "absolute",
-                        top: "100%",
-                        left: 0,
-                        right: 0,
-                        maxHeight: "220px",
-                        overflowY: "auto",
-                        backgroundColor: "var(--bg-panel)",
-                        border: "1px solid var(--border-color)",
-                        borderRadius: "8px",
-                        zIndex: 1000,
-                        boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
-                        marginTop: "4px"
-                      }}>
-                        {filteredFarmers.map(f => (
-                          <div
-                            key={f.applicationId}
-                            onMouseDown={() => {
-                              setReferenceNumber(f.applicationId);
-                              setIsFarmerDropdownOpen(false);
-                              setFarmerInputVal("");
-                            }}
-                            className="dropdown-item"
-                            style={{
-                              padding: "0.6rem 0.8rem",
-                              cursor: "pointer",
-                              borderBottom: "1px solid var(--border-color)",
-                              fontSize: "0.85rem",
-                              color: "var(--text-main)",
-                              backgroundColor: referenceNumber === f.applicationId ? "var(--bg-secondary)" : "transparent"
-                            }}
-                          >
-                            <b>{f.applicationId}</b> &mdash; {f.clientName}
-                          </div>
-                        ))}
-                        {filteredFarmers.length === 0 && (
-                          <div style={{ padding: "0.6rem 0.8rem", color: "var(--text-muted)", fontSize: "0.85rem" }}>
-                            No matching farmers found
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                  <input
+                    type="text"
+                    list="farmer-app-ids"
+                    value={referenceNumber}
+                    onChange={(e) => setReferenceNumber(e.target.value)}
+                    placeholder="Type to search and select farmer..."
+                    style={styles.input}
+                    required
+                  />
                 </div>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Service Engineer Name * (Party Master)</label>
@@ -1241,79 +1158,15 @@ export function Warehouse() {
                 </div>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Farmer / Site details (App ID) * (Party Master)</label>
-                  <div style={{ position: "relative" }}>
-                    <input
-                      type="text"
-                      value={isFarmerDropdownOpen ? farmerInputVal : (() => {
-                        const selectedFarmer = farmers.find(f => f.applicationId === referenceNumber);
-                        return selectedFarmer ? `${selectedFarmer.applicationId} (${selectedFarmer.clientName})` : "";
-                      })()}
-                      onChange={(e) => {
-                        if (!isFarmerDropdownOpen) setIsFarmerDropdownOpen(true);
-                        setFarmerInputVal(e.target.value);
-                      }}
-                      onFocus={() => {
-                        setIsFarmerDropdownOpen(true);
-                        setFarmerInputVal(""); // clear on focus to let them type
-                      }}
-                      onBlur={() => {
-                        // Small timeout to allow onMouseDown on option to register first
-                        setTimeout(() => {
-                          if (isFarmerDropdownOpen) {
-                            setReferenceNumber("");
-                            setFarmerInputVal("");
-                            setIsFarmerDropdownOpen(false);
-                          }
-                        }, 250);
-                      }}
-                      placeholder="Search and select farmer..."
-                      style={{ ...styles.input, width: "100%" }}
-                      required
-                    />
-                    {isFarmerDropdownOpen && (
-                      <div style={{
-                        position: "absolute",
-                        top: "100%",
-                        left: 0,
-                        right: 0,
-                        maxHeight: "220px",
-                        overflowY: "auto",
-                        backgroundColor: "var(--bg-panel)",
-                        border: "1px solid var(--border-color)",
-                        borderRadius: "8px",
-                        zIndex: 1000,
-                        boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
-                        marginTop: "4px"
-                      }}>
-                        {filteredFarmers.map(f => (
-                          <div
-                            key={f.applicationId}
-                            onMouseDown={() => {
-                              setReferenceNumber(f.applicationId);
-                              setIsFarmerDropdownOpen(false);
-                              setFarmerInputVal("");
-                            }}
-                            className="dropdown-item"
-                            style={{
-                              padding: "0.6rem 0.8rem",
-                              cursor: "pointer",
-                              borderBottom: "1px solid var(--border-color)",
-                              fontSize: "0.85rem",
-                              color: "var(--text-main)",
-                              backgroundColor: referenceNumber === f.applicationId ? "var(--bg-secondary)" : "transparent"
-                            }}
-                          >
-                            <b>{f.applicationId}</b> &mdash; {f.clientName}
-                          </div>
-                        ))}
-                        {filteredFarmers.length === 0 && (
-                          <div style={{ padding: "0.6rem 0.8rem", color: "var(--text-muted)", fontSize: "0.85rem" }}>
-                            No matching farmers found
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                  <input
+                    type="text"
+                    list="farmer-app-ids"
+                    value={referenceNumber}
+                    onChange={(e) => setReferenceNumber(e.target.value)}
+                    placeholder="Type to search and select farmer..."
+                    style={styles.input}
+                    required
+                  />
                 </div>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Reported Fault</label>
@@ -1361,20 +1214,15 @@ export function Warehouse() {
               <>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Batch / GRC Reference * (Must match #4)</label>
-                  <select 
-                    value={referenceNumber} 
-                    onChange={(e) => setReferenceNumber(e.target.value)} 
+                  <input
+                    type="text"
+                    list="pending-rmas-list"
+                    value={referenceNumber}
+                    onChange={(e) => setReferenceNumber(e.target.value)}
+                    placeholder="Type to search and select pending RMA..."
                     style={styles.input}
                     required
-                  >
-                    {pendingRMAs.length > 0 ? (
-                      pendingRMAs.map(ref => (
-                        <option key={ref} value={ref}>{ref}</option>
-                      ))
-                    ) : (
-                      <option value="">No pending RMAs available</option>
-                    )}
-                  </select>
+                  />
                 </div>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Manufacturer Name * (Party Master)</label>
@@ -1534,6 +1382,18 @@ export function Warehouse() {
               {formSubmitting ? "Saving entry..." : "Save Entry to Ledger"}
             </button>
           </div>
+
+          {/* Autocomplete datalists */}
+          <datalist id="farmer-app-ids">
+            {farmers.map(f => (
+              <option key={f.applicationId} value={f.applicationId}>{f.clientName}</option>
+            ))}
+          </datalist>
+          <datalist id="pending-rmas-list">
+            {pendingRMAs.map(ref => (
+              <option key={ref} value={ref} />
+            ))}
+          </datalist>
           </form>
         )
       )}
@@ -1835,66 +1695,24 @@ export function Warehouse() {
 
 const styles: Record<string, React.CSSProperties> = {
   sidebar: {
-    width: "260px",
-    backgroundColor: "#FFFFFF",
-    borderRight: "1px solid var(--border-color)",
+    width: "280px",
+    backgroundColor: "#0A0A0A", // Deep black
+    borderRight: "1px solid #1A1A1A",
     display: "flex",
     flexDirection: "column",
-    padding: "1.5rem",
+    padding: "1.5rem 1.25rem",
     minHeight: "100vh",
     position: "sticky",
-    top: 0
+    top: 0,
+    color: "#E4E4E7"
   },
   logoContainer: {
     display: "flex",
-    justifyContent: "center",
-    marginBottom: "2rem"
-  },
-  logoCard: {
-    border: "2px solid #000000",
-    borderRadius: "4px",
-    width: "160px",
-    overflow: "hidden",
-    fontFamily: "var(--font-title)",
-    backgroundColor: "#FFFFFF",
-    boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-    display: "flex",
     flexDirection: "column",
-    alignItems: "center"
-  },
-  logoTopHalf: {
-    backgroundColor: "#FFFFFF",
-    padding: "0.25rem 0",
-    width: "100%",
-    textAlign: "center",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center"
-  },
-  logoClaroText: {
-    color: "#DC2626",
-    fontWeight: "900",
-    fontSize: "1.3rem",
-    letterSpacing: "0.05em",
-    lineHeight: "1.1"
-  },
-  logoRegistered: {
-    color: "#DC2626",
-    fontSize: "0.75rem",
-    alignSelf: "flex-start",
-    marginTop: "2px",
-    fontWeight: "bold"
-  },
-  logoBottomHalf: {
-    backgroundColor: "#000000",
-    color: "#FFFFFF",
-    padding: "0.2rem 0",
-    width: "100%",
-    textAlign: "center",
-    fontSize: "0.65rem",
-    fontWeight: "800",
-    letterSpacing: "0.4em",
-    textIndent: "0.4em"
+    alignItems: "center",
+    paddingBottom: "1.5rem",
+    borderBottom: "1px solid #1A1A1A",
+    marginBottom: "1.5rem"
   },
   sidebarMenu: {
     flex: 1,
@@ -1902,43 +1720,80 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     gap: "0.5rem"
   },
-  sidebarItemActive: {
+  sidebarItem: {
     display: "flex",
-    justifyContent: "space-between",
     alignItems: "center",
     padding: "0.75rem 1rem",
-    backgroundColor: "#FEF2F2",
-    borderLeft: "4px solid #DC2626",
+    backgroundColor: "transparent",
+    border: "none",
     borderRadius: "8px",
-    color: "#DC2626",
+    color: "#A1A1AA",
     fontFamily: "var(--font-title)",
-    cursor: "default"
+    fontSize: "0.95rem",
+    fontWeight: "600",
+    cursor: "pointer",
+    textAlign: "left",
+    transition: "all 0.2s ease",
+    width: "100%",
+    outline: "none"
   },
-  sidebarBadgeActive: {
-    backgroundColor: "rgba(220, 38, 38, 0.1)",
-    color: "#DC2626",
-    fontSize: "0.65rem",
+  sidebarItemActive: {
+    display: "flex",
+    alignItems: "center",
+    padding: "0.75rem 1rem",
+    backgroundColor: "#1A1A1A", // Dark glassmorphic background
+    border: "none",
+    borderLeft: "4px solid #EF4444", // Neon red active indicator
+    borderRadius: "8px",
+    color: "#FFFFFF",
+    fontFamily: "var(--font-title)",
+    fontSize: "0.95rem",
     fontWeight: "700",
-    padding: "2px 6px",
-    borderRadius: "4px"
+    cursor: "default",
+    textAlign: "left",
+    width: "100%",
+    outline: "none"
+  },
+  sidebarSelect: {
+    width: "100%",
+    padding: "0.6rem 0.75rem",
+    backgroundColor: "#1C1C1E",
+    border: "1px solid #2C2C2E",
+    borderRadius: "6px",
+    color: "#FFFFFF",
+    fontSize: "0.88rem",
+    fontWeight: "600",
+    outline: "none",
+    cursor: "pointer"
+  },
+  sidebarBadge: {
+    backgroundColor: "#EF4444",
+    color: "#FFFFFF",
+    fontSize: "0.7rem",
+    fontWeight: "700",
+    borderRadius: "10px",
+    padding: "1px 6px"
   },
   sidebarFooter: {
-    borderTop: "1px solid var(--border-color)",
-    paddingTop: "1.5rem",
+    borderTop: "1px solid #1A1A1A",
+    paddingTop: "1.25rem",
     display: "flex",
     flexDirection: "column",
-    gap: "1rem"
+    gap: "0.75rem"
   },
   profileCard: {
     display: "flex",
     alignItems: "center",
-    gap: "0.75rem"
+    gap: "0.75rem",
+    padding: "0.5rem",
+    borderRadius: "8px",
+    backgroundColor: "#141414"
   },
   avatarCircle: {
     width: "36px",
     height: "36px",
     borderRadius: "50%",
-    backgroundColor: "#DC2626",
+    backgroundColor: "#EF4444",
     color: "#FFFFFF",
     display: "flex",
     justifyContent: "center",
@@ -1949,34 +1804,36 @@ const styles: Record<string, React.CSSProperties> = {
   profileDetails: {
     display: "flex",
     flexDirection: "column",
-    overflow: "hidden"
+    overflow: "hidden",
+    lineHeight: "1.3"
   },
   profileName: {
-    fontWeight: "600",
-    fontSize: "0.9rem",
-    color: "var(--text-main)",
+    fontSize: "0.85rem",
+    fontWeight: "700",
+    color: "#FFFFFF",
     whiteSpace: "nowrap",
-    textOverflow: "ellipsis",
-    overflow: "hidden"
+    overflow: "hidden",
+    textOverflow: "ellipsis"
   },
   profileRole: {
     fontSize: "0.75rem",
-    color: "var(--text-muted)"
+    color: "#71717A"
   },
   signOutBtn: {
+    width: "100%",
+    padding: "0.6rem",
+    backgroundColor: "#1F1212",
+    color: "#F87171",
+    border: "1px solid #7F1D1D",
+    borderRadius: "6px",
+    fontSize: "0.85rem",
+    fontWeight: "700",
+    cursor: "pointer",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: "0.5rem",
-    padding: "0.65rem 1rem",
-    backgroundColor: "#FFFFFF",
-    border: "1px solid #E5E7EB",
-    borderRadius: "8px",
-    color: "#EF4444",
-    cursor: "pointer",
-    fontSize: "0.9rem",
-    fontWeight: "700",
-    transition: "all 0.2s"
+    gap: "6px",
+    transition: "background-color 0.2s"
   },
   loading: {
     display: "flex",
@@ -2141,16 +1998,75 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: "700"
   },
   metricValue: {
-    fontSize: "2rem",
+    fontSize: "2.75rem",
     fontWeight: "800",
     color: "var(--text-main)",
-    fontFamily: "monospace"
+    fontFamily: "var(--font-display)"
   },
   metricValueAlert: {
-    fontSize: "2rem",
+    fontSize: "2.75rem",
     fontWeight: "800",
     color: "#ea580c",
-    fontFamily: "monospace"
+    fontFamily: "var(--font-display)"
+  },
+  metricValueActive: {
+    fontSize: "2.75rem",
+    fontWeight: "800",
+    color: "#3B82F6",
+    fontFamily: "var(--font-display)"
+  },
+  reqCardHeaderCompact: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "0.25rem"
+  },
+  reqIdCompact: {
+    fontSize: "0.75rem",
+    fontWeight: "700",
+    color: "var(--text-muted)",
+    letterSpacing: "0.5px"
+  },
+  reqCardTitleCompact: {
+    borderBottom: "1px solid var(--border-color)",
+    paddingBottom: "0.4rem",
+    marginBottom: "0.4rem"
+  },
+  reqMetaGridCompact: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "0.4rem 0.6rem",
+    marginBottom: "0.5rem"
+  },
+  reqActionSelectCompact: {
+    padding: "3px 6px",
+    borderRadius: "4px",
+    border: "1px solid var(--border-color)",
+    backgroundColor: "#FFFFFF",
+    fontSize: "0.75rem",
+    fontWeight: "600",
+    outline: "none"
+  },
+  reqActionBtnCompact: {
+    padding: "4px 8px",
+    backgroundColor: "var(--primary)",
+    color: "#FFFFFF",
+    border: "none",
+    borderRadius: "4px",
+    fontSize: "0.75rem",
+    fontWeight: "700",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    gap: "4px"
+  },
+  reqCardActionsCompact: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: "auto",
+    paddingTop: "0.4rem",
+    borderTop: "1px solid var(--border-color)"
   },
   filterBar: {
     display: "flex",

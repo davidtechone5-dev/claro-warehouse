@@ -291,15 +291,31 @@ async function main() {
 
       const filename = fileNames[schema];
       if (filename) {
-        let excelPath = path.resolve(process.cwd(), filename);
-        if (!fs.existsSync(excelPath)) {
-          excelPath = path.resolve(__dirname, "../../..", filename);
-        }
-        if (!fs.existsSync(excelPath)) {
-          excelPath = path.resolve(__dirname, "../..", filename);
+        let excelPath = "";
+        const candidates = [
+          path.resolve(process.cwd(), filename),
+          path.resolve(__dirname, "../../..", filename),
+          path.resolve(__dirname, "../..", filename),
+        ];
+
+        // Also try alt names with " (1)" suffix
+        const ext = path.extname(filename);
+        const base = path.basename(filename, ext);
+        const altFilename = `${base} (1)${ext}`;
+        candidates.push(
+          path.resolve(process.cwd(), altFilename),
+          path.resolve(__dirname, "../../..", altFilename),
+          path.resolve(__dirname, "../..", altFilename)
+        );
+
+        for (const cand of candidates) {
+          if (fs.existsSync(cand)) {
+            excelPath = cand;
+            break;
+          }
         }
 
-        if (fs.existsSync(excelPath)) {
+        if (excelPath) {
           console.log(`📊 Found Excel stock sheet for "${schema}" at: ${excelPath}. Importing...`);
           try {
             const workbook = XLSX.readFile(excelPath);

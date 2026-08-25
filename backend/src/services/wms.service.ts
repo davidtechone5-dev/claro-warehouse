@@ -1,4 +1,27 @@
 import { prisma } from "../db";
+import crypto from "crypto";
+
+let lastCsvText: string | null = null;
+let lastFetchTime = 0;
+
+async function fetchCsvWithCache(): Promise<string> {
+  const sheetUrl = "https://docs.google.com/spreadsheets/d/1kQkVIhbOgg3n4FHSia2Ow7Scm0AZLWHuMAwA-1cOsZY/export?format=csv&gid=193399218";
+  
+  if (lastCsvText && (Date.now() - lastFetchTime < 10000)) {
+    console.log("📥 [Sync] Reusing cached Google Sheets CSV content (fetched within last 10s)");
+    return lastCsvText;
+  }
+  
+  console.log("📥 [Sync] Sending fetch request to Google Sheets...");
+  const response = await fetch(sheetUrl);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  const csvText = await response.text();
+  lastCsvText = csvText;
+  lastFetchTime = Date.now();
+  return csvText;
+}
 
 async function runOnAllSchemas<T>(callback: () => Promise<T[]>): Promise<T[]> {
   const schemas = ["jalna", "rajasthan", "haryana", "mp"];
@@ -417,6 +440,7 @@ export const wmsService = {
     reportedFault?: string;
     conditionReceived?: string;
     userId: string;
+    materialRequestId?: string;
     lines: Array<{
       partCode: string;
       quantity: number;
@@ -472,6 +496,31 @@ export const wmsService = {
           }
           if (line.serials.length !== line.quantity) {
             throw new Error(`Validation Error: Part ${part.code} has quantity ${line.quantity} but ${line.serials.length} serials were provided.`);
+          }
+
+          // Format validation for serial numbers
+          const isPump = part.code.toLowerCase().startsWith("pump") || part.description.toLowerCase().includes("pump");
+          const isMotor = part.code.toLowerCase().startsWith("motor") || part.description.toLowerCase().includes("motor");
+          const isPCB = part.code.toLowerCase().startsWith("pcb") || part.description.toLowerCase().includes("pcb") || part.description.toLowerCase().includes("card") || part.description.toLowerCase().includes("controller");
+
+          for (const sn of line.serials) {
+            const cleanSn = sn.trim();
+            if (cleanSn.length < 5 || cleanSn.length > 25) {
+              throw new Error(`Validation Error: Serial number '${cleanSn}' must be between 5 and 25 characters long.`);
+            }
+            if (!/^[a-zA-Z0-9\-_]+$/.test(cleanSn)) {
+              throw new Error(`Validation Error: Serial number '${cleanSn}' contains invalid characters. Alphanumeric, hyphen, and underscore only.`);
+            }
+
+            if (isPump || isMotor) {
+              if (!cleanSn.toUpperCase().startsWith("LPS")) {
+                throw new Error(`Validation Error: Serial number '${cleanSn}' is invalid for Pump/Motor ${part.code}. Must start with 'LPS' (e.g. LPSA1...).`);
+              }
+            } else if (isPCB) {
+              if (!cleanSn.toUpperCase().startsWith("B")) {
+                throw new Error(`Validation Error: Serial number '${cleanSn}' is invalid for Power Card/Controller ${part.code}. Must start with 'B' (e.g. B45... or B90...).`);
+              }
+            }
           }
 
           const cleanSerials = line.serials.map(sn => sn.trim());
@@ -580,7 +629,8 @@ export const wmsService = {
           vehicleNumber: data.vehicleNumber,
           reportedFault: data.reportedFault,
           conditionReceived: data.conditionReceived,
-          userId: data.userId
+          userId: data.userId,
+          materialRequestId: data.materialRequestId
         }
       });
 
@@ -915,31 +965,43 @@ export const wmsService = {
 
       // 5. Update google sheet MaterialRequest status on Stage 2 dispatch
       if (data.stage === 2) {
-        const ticket = await tx.ticket.findFirst({
-          where: {
-            complaint: {
-              applicationId: data.referenceNumber
-            }
-          }
-        });
+        let materialRequest = null;
+        if (data.materialRequestId) {
+          materialRequest = await tx.materialRequest.findUnique({
+            where: { id: data.materialRequestId }
+          });
+        }
 
-        if (ticket) {
-          const materialRequest = await tx.materialRequest.findFirst({
-            where: { ticketId: ticket.id, status: "PENDING" }
+        if (!materialRequest) {
+          const ticket = await tx.ticket.findFirst({
+            where: {
+              complaint: {
+                applicationId: data.referenceNumber
+              }
+            }
           });
 
-          if (materialRequest) {
-            await tx.materialRequest.update({
-              where: { id: materialRequest.id },
-              data: { status: "DISPATCHED" }
-            });
-
-            // Associate the material request ID to our movement log to keep them in one sync
-            await tx.inventoryMovement.update({
-              where: { id: movement.id },
-              data: { materialRequestId: materialRequest.id }
+          if (ticket) {
+            materialRequest = await tx.materialRequest.findFirst({
+              where: {
+                ticketId: ticket.id,
+                status: { in: ["PENDING", "APPROVED"] }
+              }
             });
           }
+        }
+
+        if (materialRequest) {
+          await tx.materialRequest.update({
+            where: { id: materialRequest.id },
+            data: { status: "DISPATCHED" }
+          });
+
+          // Associate the material request ID to our movement log to keep them in one sync
+          await tx.inventoryMovement.update({
+            where: { id: movement.id },
+            data: { materialRequestId: materialRequest.id }
+          });
         }
       }
 
@@ -1071,11 +1133,17 @@ export const wmsService = {
     const activeSchema = warehouseContext.getStore() || "jalna";
     if (activeSchema === "all") {
       const schemas = ["jalna", "rajasthan", "haryana", "mp"];
+      (wmsService as any).lastSyncedHashBySchema = {};
       for (const schema of schemas) {
         await warehouseContext.run(schema, () => wmsService.clearAll());
       }
       return;
     }
+
+    if (!(wmsService as any).lastSyncedHashBySchema) {
+      (wmsService as any).lastSyncedHashBySchema = {};
+    }
+    (wmsService as any).lastSyncedHashBySchema[activeSchema] = null;
 
     return prisma.$transaction(async (tx) => {
       await tx.movementSerialNumber.deleteMany({});
@@ -1276,27 +1344,22 @@ export const wmsService = {
       return { newRequestsImported: sum };
     }
 
-    const sheetUrl =
-      "https://docs.google.com/spreadsheets/d/1kQkVIhbOgg3n4FHSia2Ow7Scm0AZLWHuMAwA-1cOsZY/export?format=csv&gid=193399218";
-
     console.log(
       `🔄 [Sync] Fetching material requests for schema context: "${activeSchema}"`
     );
 
     try {
-      console.log(`📥 [Sync] Sending fetch request to Google Sheets...`);
+      const csvText = await fetchCsvWithCache();
 
-      const response = await fetch(sheetUrl);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      // Compute hash and check if already synced for this schema
+      const currentHash = crypto.createHash("md5").update(csvText).digest("hex");
+      if (!(wmsService as any).lastSyncedHashBySchema) {
+        (wmsService as any).lastSyncedHashBySchema = {};
       }
-
-      const csvText = await response.text();
-
-      console.log(
-        `📥 [Sync] Sheet fetched successfully. Size: ${csvText.length} characters.`
-      );
+      if ((wmsService as any).lastSyncedHashBySchema[activeSchema] === currentHash) {
+        console.log(`🚀 [Sync] Schema "${activeSchema}" is already up to date with Google Sheet hash (${currentHash}). Skipping database writes.`);
+        return { newRequestsImported: 0 };
+      }
 
       // Parse CSV
       const rows = parseCSV(csvText);
@@ -1733,6 +1796,35 @@ export const wmsService = {
         MATERIAL_BATCH_SIZE
       );
 
+      // Fetch all existing material requests for this schema context to perform in-memory diff checks
+      const existingDbRequests = await prisma.materialRequest.findMany({
+        select: {
+          id: true,
+          sourceRowId: true,
+          status: true,
+          remarks: true,
+          items: true,
+          engineerId: true
+        }
+      });
+
+      // Index existing requests in memory
+      const existingMap = new Map<string, {
+        id: string;
+        sourceRowId: string | null;
+        status: string;
+        remarks: string | null;
+        items: any;
+        engineerId: string | null;
+      }>();
+
+      for (const req of existingDbRequests) {
+        if (req.sourceRowId) {
+          existingMap.set(req.sourceRowId, req);
+        }
+        existingMap.set(req.id, req);
+      }
+
       let count = 0;
 
       console.log(
@@ -1759,20 +1851,28 @@ export const wmsService = {
         );
 
         for (const request of batch) {
-          // Find existing request by Sync ID or fallback to legacy composite ID (id)
+          // Look up in memory map first
           let existingRequest = null;
           if (request.syncId) {
-            existingRequest = await prisma.materialRequest.findUnique({
-              where: { sourceRowId: request.syncId }
-            });
+            existingRequest = existingMap.get(request.syncId);
           }
           if (!existingRequest) {
-            existingRequest = await prisma.materialRequest.findUnique({
-              where: { id: request.requestUniqueId }
-            });
+            existingRequest = existingMap.get(request.requestUniqueId);
           }
 
           if (existingRequest) {
+            // Check if any fields changed. If not, skip update!
+            const itemsMatch = JSON.stringify(request.itemsJson) === JSON.stringify(existingRequest.items);
+            const statusMatch = request.status === existingRequest.status;
+            const remarksMatch = (request.remarks || "") === (existingRequest.remarks || "");
+            const engineerMatch = request.engineerId === existingRequest.engineerId;
+            const sourceRowIdMatch = !request.syncId || request.syncId === existingRequest.sourceRowId;
+
+            if (itemsMatch && statusMatch && remarksMatch && engineerMatch && sourceRowIdMatch) {
+              // No changes. Skip database update!
+              continue;
+            }
+
             // Edit flow: Update the same physical record
             await prisma.materialRequest.update({
               where: { id: existingRequest.id },
@@ -1784,9 +1884,16 @@ export const wmsService = {
                 engineerId: request.engineerId
               }
             });
+
+            // Update the map record to keep memory cache accurate
+            existingRequest.sourceRowId = request.syncId || existingRequest.sourceRowId;
+            existingRequest.status = request.status;
+            existingRequest.remarks = request.remarks;
+            existingRequest.items = request.itemsJson;
+            existingRequest.engineerId = request.engineerId;
           } else {
             // Creation flow: Inserts a new request
-            await prisma.materialRequest.create({
+            const newRequest = await prisma.materialRequest.create({
               data: {
                 id: request.requestUniqueId,
                 sourceRowId: request.syncId || null,
@@ -1798,6 +1905,20 @@ export const wmsService = {
                 createdAt: request.createdAt
               }
             });
+
+            // Add the newly created request to our map to prevent double creation if encountered again
+            const mapObj = {
+              id: newRequest.id,
+              sourceRowId: newRequest.sourceRowId,
+              status: newRequest.status,
+              remarks: newRequest.remarks,
+              items: newRequest.items,
+              engineerId: newRequest.engineerId
+            };
+            if (newRequest.sourceRowId) {
+              existingMap.set(newRequest.sourceRowId, mapObj);
+            }
+            existingMap.set(newRequest.id, mapObj);
           }
         }
 
@@ -1811,6 +1932,12 @@ export const wmsService = {
       console.log(
         `🎉 [Sync] Successfully synced ${count} material request entries for "${activeSchema}"`
       );
+
+      // Cache the successfully completed sync hash
+      if (!(wmsService as any).lastSyncedHashBySchema) {
+        (wmsService as any).lastSyncedHashBySchema = {};
+      }
+      (wmsService as any).lastSyncedHashBySchema[activeSchema] = currentHash;
 
       return {
         newRequestsImported: count

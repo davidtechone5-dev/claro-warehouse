@@ -106,6 +106,7 @@ export const wmsController = {
       vehicleNumber,
       reportedFault,
       conditionReceived,
+      materialRequestId,
       lines
     } = req.body;
 
@@ -129,6 +130,7 @@ export const wmsController = {
         reportedFault,
         conditionReceived,
         userId,
+        materialRequestId,
         lines
       });
 
