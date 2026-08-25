@@ -1734,15 +1734,26 @@ export const wmsService = {
         let parsedTimestamp = new Date();
 
         if (row.timestamp) {
-          const candidate = new Date(row.timestamp);
-
-          if (!isNaN(candidate.getTime())) {
-            parsedTimestamp = candidate;
+          // Parse DD/MM/YYYY HH:mm:ss strictly in UTC to avoid local timezone shifts
+          const parts = row.timestamp.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})$/);
+          if (parts) {
+            const day = parseInt(parts[1], 10);
+            const month = parseInt(parts[2], 10) - 1; // 0-indexed month
+            const year = parseInt(parts[3], 10);
+            const hour = parseInt(parts[4], 10);
+            const minute = parseInt(parts[5], 10);
+            const second = parseInt(parts[6], 10);
+            parsedTimestamp = new Date(Date.UTC(year, month, day, hour, minute, second));
+          } else {
+            const candidate = new Date(row.timestamp);
+            if (!isNaN(candidate.getTime())) {
+              parsedTimestamp = candidate;
+            }
           }
         }
 
         const cleanedTime = row.timestamp
-          ? parsedTimestamp.getTime()
+          ? row.timestamp.trim().replace(/[^a-zA-Z0-9]/g, "")
           : "no-time";
 
         const requestUniqueId =
