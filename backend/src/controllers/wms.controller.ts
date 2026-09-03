@@ -246,8 +246,10 @@ export const wmsController = {
 
   async getPartSerials(req: Request, res: Response) {
     const { code } = req.params;
+    const warehouseId = (req.query.warehouseId as string) || (req.headers["x-warehouse-id"] as string);
+    const status = req.query.status as string;
     try {
-      const serials = await wmsService.getPartSerials(code);
+      const serials = await wmsService.getPartSerials(code, warehouseId, status);
       return res.status(200).json(serials);
     } catch (err: any) {
       return res.status(500).json({ detail: err.message });

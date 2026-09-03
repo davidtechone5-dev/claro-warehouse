@@ -176,11 +176,18 @@ export const wmsService = {
   async getPendingRMAReferences(warehouseId: string): Promise<string[]> {
     const { warehouseContext } = await import("../db");
     const activeSchema = warehouseContext.getStore() || "jalna";
+    const whIdMap: Record<string, string> = {
+      jalna: "wh-jalna-1111",
+      rajasthan: "wh-rajasthan-2222",
+      haryana: "wh-haryana-3333",
+      mp: "wh-mp-4444"
+    };
+
     if (activeSchema === "all" || warehouseId === "all") {
       const schemas = ["jalna", "rajasthan", "haryana", "mp"];
       const results = await Promise.all(
         schemas.map((schema: string) => {
-          const whId = `wh-${schema}-1111`;
+          const whId = whIdMap[schema] || `wh-${schema}-1111`;
           return warehouseContext.run(schema, () => wmsService.getPendingRMAReferences(whId));
         })
       );
@@ -209,11 +216,18 @@ export const wmsService = {
     const { warehouseContext } = await import("../db");
     const activeSchema = warehouseContext.getStore() || "jalna";
 
+    const whIdMap: Record<string, string> = {
+      jalna: "wh-jalna-1111",
+      rajasthan: "wh-rajasthan-2222",
+      haryana: "wh-haryana-3333",
+      mp: "wh-mp-4444"
+    };
+
     if (activeSchema === "all" || warehouseId === "all") {
       const schemas = ["jalna", "rajasthan", "haryana", "mp"];
       const results: any[] = [];
       for (const schema of schemas) {
-        const whId = `wh-${schema}-1111`;
+        const whId = whIdMap[schema] || `wh-${schema}-1111`;
         const res = await warehouseContext.run(schema, () => wmsService.getStock(whId));
         results.push(res);
       }
@@ -399,11 +413,18 @@ export const wmsService = {
   async getMovements(warehouseId: string): Promise<any[]> {
     const { warehouseContext } = await import("../db");
     const activeSchema = warehouseContext.getStore() || "jalna";
+    const whIdMap: Record<string, string> = {
+      jalna: "wh-jalna-1111",
+      rajasthan: "wh-rajasthan-2222",
+      haryana: "wh-haryana-3333",
+      mp: "wh-mp-4444"
+    };
+
     if (activeSchema === "all" || warehouseId === "all") {
       const schemas = ["jalna", "rajasthan", "haryana", "mp"];
       const results = await Promise.all(
         schemas.map((schema: string) => {
-          const whId = `wh-${schema}-1111`;
+          const whId = whIdMap[schema] || `wh-${schema}-1111`;
           return warehouseContext.run(schema, () => wmsService.getMovements(whId));
         })
       );
@@ -449,6 +470,18 @@ export const wmsService = {
     }>;
   }) {
     return prisma.$transaction(async (tx) => {
+      // Normalize and sanitize all serials
+      for (const line of data.lines) {
+        line.serials = (line.serials || []).map(s => s.trim().toUpperCase()).filter(Boolean);
+        if (line.replacedSerialsMap) {
+          const cleanMap: Record<string, string> = {};
+          for (const [k, v] of Object.entries(line.replacedSerialsMap)) {
+            cleanMap[k.trim().toUpperCase()] = v.trim().toUpperCase();
+          }
+          line.replacedSerialsMap = cleanMap;
+        }
+      }
+
       // 1. Resolve Warehouse to determine sequential Challan number if needed
       const warehouse = await tx.warehouse.findUnique({
         where: { id: data.warehouseId }
@@ -2251,12 +2284,44 @@ export const wmsService = {
     }
   },
 
-  async getPartSerials(partCode: string): Promise<any> {
+  async getPartSerials(partCode: string, warehouseId?: string, status?: string): Promise<any> {
+    const { warehouseContext } = await import("../db");
+    const activeSchema = warehouseContext.getStore() || "jalna";
+
+    const whereClause: any = { partCode };
+
+    if (status) {
+      whereClause.status = status;
+    } else {
+      whereClause.status = { in: ["Fresh", "Faulty-Received", "At-Manufacturer", "Sent-to Farmer"] };
+    }
+
+    if (warehouseId && warehouseId !== "all") {
+      // Only filter currentLocation by warehouseId for warehouse-local stock (Fresh & Faulty-Received).
+      // Serials in "At-Manufacturer" or "Sent-to Farmer" reside at manufacturer/farmer locations.
+      if (status === "Fresh" || status === "Faulty-Received") {
+        whereClause.currentLocation = warehouseId;
+      }
+    }
+
+    if (activeSchema === "all") {
+      const results = await runOnAllSchemas(() => prisma.unitLedger.findMany({
+        where: whereClause,
+        orderBy: { serialNo: "asc" }
+      }));
+      const unique = [];
+      const seen = new Set();
+      for (const item of results) {
+        if (!seen.has(item.serialNo)) {
+          seen.add(item.serialNo);
+          unique.push(item);
+        }
+      }
+      return unique;
+    }
+
     return prisma.unitLedger.findMany({
-      where: {
-        partCode,
-        status: { in: ["Fresh", "Faulty-Received", "At-Manufacturer"] }
-      },
+      where: whereClause,
       orderBy: { serialNo: "asc" }
     });
   },

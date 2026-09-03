@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../utils/api";
 import { Plus, Trash2, CheckCircle, AlertTriangle, ArrowRight, Warehouse as WarehouseIcon, LogOut, Package, ShieldAlert, Clock } from "lucide-react";
+import { SerialPicker, invalidateSerialsCache } from "../components/SerialPicker";
 
 export function Warehouse() {
   // Tab control: 'dashboard', 'requests', 'entry', 'log', 'challans'
@@ -321,6 +322,9 @@ export function Warehouse() {
         materialRequestId: prefilledRequestId || undefined,
         lines: linesPayload
       });
+
+      // Invalidate serials cache so new serials are instantly available in subsequent stages
+      invalidateSerialsCache();
 
       // Reload warehouse data
       const stock = await api.getWmsStock(selectedWarehouseId);
@@ -1268,8 +1272,6 @@ export function Warehouse() {
               </div>
 
               {formLines.map((line, index) => {
-                const enteredSerials = line.serialsText.split("\n").map(s => s.trim()).filter(s => s.length > 0);
-                const isMatching = enteredSerials.length === Number(line.quantity);
                 const selectedPart = parts.find(p => p.code === line.partCode);
                 const isSerialized = selectedPart ? selectedPart.serialTracked : true;
 
@@ -1299,18 +1301,18 @@ export function Warehouse() {
                     </div>
                     <div>
                       {isSerialized ? (
-                        <>
-                          <textarea
-                            value={line.serialsText}
-                            onChange={(e) => handleLineChange(index, "serialsText", e.target.value)}
-                            placeholder="Paste new/repaired serial numbers here..."
-                            style={styles.textarea}
-                            required
-                          />
-                          <div style={isMatching ? styles.qtyCheckOk : styles.qtyCheckBad}>
-                            {enteredSerials.length} serials parsed &middot; {isMatching ? "matches quantity" : `quantity says ${line.quantity}`}
-                          </div>
-                        </>
+                        <SerialPicker
+                          partCode={line.partCode}
+                          partDescription={selectedPart?.description}
+                          warehouseId={selectedWarehouseId}
+                          movementStage={movementStage}
+                          conditionReceived={conditionReceived}
+                          value={line.serialsText}
+                          onChange={(newSerials) => handleLineChange(index, "serialsText", newSerials)}
+                          targetQuantity={Number(line.quantity) || 1}
+                          onQuantityChange={(newQty) => handleLineChange(index, "quantity", newQty)}
+                          placeholder="Type or search serials..."
+                        />
                       ) : (
                         <div style={{ padding: "0.6rem 0.85rem", color: "var(--text-muted)", fontSize: "0.85rem", fontStyle: "italic", border: "1px dashed var(--border-color)", borderRadius: "6px", backgroundColor: "var(--bg-secondary)" }}>
                           Non-serialized part &mdash; no serials required
@@ -1320,18 +1322,18 @@ export function Warehouse() {
                     {showOriginalSerials && (
                       <div>
                         {isSerialized ? (
-                          <>
-                            <textarea
-                              value={line.replacedSerialsText}
-                              onChange={(e) => handleLineChange(index, "replacedSerialsText", e.target.value)}
-                              placeholder="Paste original faulty serials replaced (one per line)..."
-                              style={styles.textarea}
-                              required
-                            />
-                            <div style={line.replacedSerialsText.split("\n").map(s => s.trim()).filter(s => s.length > 0).length === Number(line.quantity) ? styles.qtyCheckOk : styles.qtyCheckBad}>
-                              {line.replacedSerialsText.split("\n").map(s => s.trim()).filter(s => s.length > 0).length} serials mapped
-                            </div>
-                          </>
+                          <SerialPicker
+                            partCode={line.partCode}
+                            partDescription={selectedPart?.description}
+                            warehouseId={selectedWarehouseId}
+                            movementStage={movementStage}
+                            conditionReceived={conditionReceived}
+                            isOriginalReplaced={true}
+                            value={line.replacedSerialsText}
+                            onChange={(newSerials) => handleLineChange(index, "replacedSerialsText", newSerials)}
+                            targetQuantity={Number(line.quantity) || 1}
+                            placeholder="Select original faulty serial replaced..."
+                          />
                         ) : (
                           <div style={{ padding: "0.6rem 0.85rem", color: "var(--text-muted)", fontSize: "0.85rem", fontStyle: "italic", border: "1px dashed var(--border-color)", borderRadius: "6px", backgroundColor: "var(--bg-secondary)" }}>
                             Non-serialized

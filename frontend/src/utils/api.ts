@@ -94,8 +94,10 @@ export const api = {
     return res.data;
   },
 
-  async getPartSerials(code: string) {
-    const res = await client.get(`/parts/${code}/serials`);
+  async getPartSerials(code: string, warehouseId?: string, status?: string) {
+    const res = await client.get(`/parts/${code}/serials`, {
+      params: { warehouseId, status }
+    });
     return res.data;
   },
 

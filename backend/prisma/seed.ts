@@ -65,7 +65,9 @@ const defaultParts = [
   { code: "MC4-PV-1000V", description: "MC4 PV CABLE CONNECTOR PAIR 1000V", category: "Wiring", hpRating: "N/A", serialTracked: false, valuationAmount: 350.00 },
   { code: "3PIN-30A-500V", description: "3-Pin Cableconnector Pair30A 500V AC", category: "Wiring", hpRating: "N/A", serialTracked: false, valuationAmount: 550.00 },
   { code: "RMS-4G-GPS", description: "Remote Monittoring System 4g+Gps+Dispaly", category: "Balance of Systems", hpRating: "N/A", serialTracked: true, valuationAmount: 4500.00 },
-  { code: "SPD-DC-1000V", description: "SPPV3T2-1000 DC SPD CLASS II 1000V", category: "Balance of Systems", hpRating: "N/A", serialTracked: false, valuationAmount: 1800.00 }
+  { code: "SPD-DC-1000V", description: "SPPV3T2-1000 DC SPD CLASS II 1000V", category: "Balance of Systems", hpRating: "N/A", serialTracked: false, valuationAmount: 1800.00 },
+  { code: "PV-MODULES", description: "PV MODULES", category: "Solar Panels", hpRating: "N/A", serialTracked: false, valuationAmount: 8500.00 },
+  { code: "TOGGLE-SWITCH", description: "TOGAL SWITCH", category: "Balance of Systems", hpRating: "N/A", serialTracked: false, valuationAmount: 300.00 }
 ];
 
 function cleanString(str: string): string {
@@ -252,7 +254,21 @@ async function main() {
       }
 
       // 4. Seed Parts
-      for (const part of defaultParts) {
+      const haryanaPartCodes = [
+        "PUMP-7.5HP-DC-30M", "PUMP-7.5HP-DC-50M", "PUMP-7.5HP-DC-70M", "PUMP-7.5HP-DC-100M",
+        "PUMP-10HP-DC-30M", "PUMP-10HP-DC-50M", "PUMP-10HP-DC-70M", "PUMP-10HP-DC-100M",
+        "PUMP-10HP-AC-30M", "PUMP-10HP-AC-50M", "PUMP-10HP-AC-70M", "PUMP-10HP-AC-100M",
+        "MOTOR-7.5HP-DC", "MOTOR-10HP-AC", "MOTOR-10HP-DC",
+        "PCB-7.5HP-DC", "PCB-10HP-DC", "PCB-10HP-AC",
+        "MCB-2P-32A", "MC4-PV-1000V", "3PIN-30A-500V",
+        "RMS-4G-GPS", "SPD-DC-1000V", "PV-MODULES", "TOGGLE-SWITCH"
+      ];
+
+      const partsToSeed = schema === "haryana"
+        ? defaultParts.filter(p => haryanaPartCodes.includes(p.code))
+        : defaultParts;
+
+      for (const part of partsToSeed) {
         await prisma.part.upsert({
           where: { code: part.code },
           update: part,
