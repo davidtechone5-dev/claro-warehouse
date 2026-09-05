@@ -14,7 +14,9 @@ const schemas = ["jalna", "rajasthan", "haryana", "mp"];
 const defaultParts = [
   // 3HP
   { code: "PUMP-3HP-DC-30M", description: "3HP DC 30M MONO SOLAR PUMP", category: "Pumps", hpRating: "3HP", serialTracked: true, valuationAmount: 11000.00 },
+  { code: "PUMP-3HP-DC-50M", description: "3HP DC 50M MONO SOLAR PUMP", category: "Pumps", hpRating: "3HP", serialTracked: true, valuationAmount: 11500.00 },
   { code: "PUMP-3HP-DC-70M", description: "3HP DC 70M MONO SOLAR PUMP", category: "Pumps", hpRating: "3HP", serialTracked: true, valuationAmount: 12000.00 },
+  { code: "PUMP-3HP-AC-30M", description: "3HP AC 30M MONO SOLAR PUMP", category: "Pumps", hpRating: "3HP", serialTracked: true, valuationAmount: 11000.00 },
   { code: "PUMP-3HP-AC-50M", description: "3 HP AC HEAD 50M PUMP", category: "Pumps", hpRating: "3HP", serialTracked: true, valuationAmount: 11500.00 },
   { code: "PUMP-3HP-AC-70M", description: "3 HP AC HEAD 70M PUMP", category: "Pumps", hpRating: "3HP", serialTracked: true, valuationAmount: 12000.00 },
   { code: "MOTOR-3HP-DC", description: "3HP Dc Mono Solar Motor", category: "Motors", hpRating: "3HP", serialTracked: true, valuationAmount: 8000.00 },
@@ -24,10 +26,12 @@ const defaultParts = [
 
   // 5HP
   { code: "PUMP-5HP-DC-30M", description: "5HP DC 30M MONO SOLAR PUMP", category: "Pumps", hpRating: "5HP", serialTracked: true, valuationAmount: 14000.00 },
-  { code: "PUMP-5HP-DC-70M", description: "5HP DC 70M MONO SOLAR PUMP", category: "Pumps", hpRating: "5HP", serialTracked: true, valuationAmount: 15000.00 },
   { code: "PUMP-5HP-DC-50M", description: "5 HP DC HEAD 50M PUMP", category: "Pumps", hpRating: "5HP", serialTracked: true, valuationAmount: 14500.00 },
+  { code: "PUMP-5HP-DC-70M", description: "5HP DC 70M MONO SOLAR PUMP", category: "Pumps", hpRating: "5HP", serialTracked: true, valuationAmount: 15000.00 },
+  { code: "PUMP-5HP-DC-100M", description: "5HP DC 100M MONO SOLAR PUMP", category: "Pumps", hpRating: "5HP", serialTracked: true, valuationAmount: 16000.00 },
   { code: "PUMP-5HP-AC-30M", description: "5 HP AC HEAD 30M PUMP", category: "Pumps", hpRating: "5HP", serialTracked: true, valuationAmount: 13500.00 },
   { code: "PUMP-5HP-AC-50M", description: "5 HP AC HEAD 50M PUMP", category: "Pumps", hpRating: "5HP", serialTracked: true, valuationAmount: 14000.00 },
+  { code: "PUMP-5HP-AC-70M", description: "5HP AC 70M MONO SOLAR PUMP", category: "Pumps", hpRating: "5HP", serialTracked: true, valuationAmount: 15000.00 },
   { code: "PUMP-5HP-AC-100M", description: "5 HP AC HEAD 100M PUMP", category: "Pumps", hpRating: "5HP", serialTracked: true, valuationAmount: 15500.00 },
   { code: "MOTOR-5HP-DC", description: "5HP Dc Mono Solar Motor", category: "Motors", hpRating: "5HP", serialTracked: true, valuationAmount: 10000.00 },
   { code: "MOTOR-5HP-AC", description: "5HP AC MONO SOLAR MOTOR", category: "Motors", hpRating: "5HP", serialTracked: true, valuationAmount: 9500.00 },
@@ -41,6 +45,8 @@ const defaultParts = [
   { code: "PUMP-7.5HP-DC-100M", description: "7.5HP DC 100M MONO SOLAR PUMP", category: "Pumps", hpRating: "7.5HP", serialTracked: true, valuationAmount: 20000.00 },
   { code: "PUMP-7.5HP-AC-30M", description: "7.5 HP AC HEAD 30M PUMP", category: "Pumps", hpRating: "7.5HP", serialTracked: true, valuationAmount: 17500.00 },
   { code: "PUMP-7.5HP-AC-50M", description: "7.5 HP AC HEAD 50M PUMP", category: "Pumps", hpRating: "7.5HP", serialTracked: true, valuationAmount: 18000.00 },
+  { code: "PUMP-7.5HP-AC-70M", description: "7.5HP AC 70M MONO SOLAR PUMP", category: "Pumps", hpRating: "7.5HP", serialTracked: true, valuationAmount: 18500.00 },
+  { code: "PUMP-7.5HP-AC-100M", description: "7.5HP AC 100M MONO SOLAR PUMP", category: "Pumps", hpRating: "7.5HP", serialTracked: true, valuationAmount: 19500.00 },
   { code: "MOTOR-7.5HP-DC", description: "7.5hp Dc Mono Solar Motor", category: "Motors", hpRating: "7.5HP", serialTracked: true, valuationAmount: 14000.00 },
   { code: "MOTOR-7.5HP-AC", description: "7.5HP AC MONO SOLAR MOTOR", category: "Motors", hpRating: "7.5HP", serialTracked: true, valuationAmount: 13500.00 },
   { code: "PCB-7.5HP-DC", description: "7.5HP Dc Mono Solar Controller Power Pcb", category: "Inverters", hpRating: "7.5HP", serialTracked: true, valuationAmount: 8500.00 },
@@ -60,9 +66,17 @@ const defaultParts = [
   { code: "PCB-10HP-DC", description: "10hp Dc Mono Solar Controller Power Pcb", category: "Inverters", hpRating: "10HP", serialTracked: true, valuationAmount: 10500.00 },
   { code: "PCB-10HP-AC", description: "10hp Ac Mono Solar Controller Power Pcb", category: "Inverters", hpRating: "10HP", serialTracked: true, valuationAmount: 9500.00 },
 
+  // 2HP
+  { code: "PUMP-2HP-DC-30M", description: "2HP DC 30M MONO SOLAR PUMP", category: "Pumps", hpRating: "2HP", serialTracked: true, valuationAmount: 9500.00 },
+  { code: "MOTOR-2HP-DC", description: "2 HP DC MONO SOLAR MOTOR", category: "Motors", hpRating: "2HP", serialTracked: true, valuationAmount: 6500.00 },
+  { code: "PCB-2HP-DC", description: "2HP DC MONO SOLAR CONTROLLER POWER PCB", category: "Inverters", hpRating: "2HP", serialTracked: true, valuationAmount: 3800.00 },
+
   // General & Accessories
   { code: "MCB-2P-32A", description: "2P 32A 800V DC MCB 7.5/10HP", category: "Balance of Systems", hpRating: "N/A", serialTracked: false, valuationAmount: 1200.00 },
+  { code: "MCB-2P-20A", description: "2P 20A 500V DC MCB UPTO 5HP", category: "Balance of Systems", hpRating: "N/A", serialTracked: false, valuationAmount: 950.00 },
+  { code: "MCB-2P-16A", description: "2P 16A 500V DC MCB 3/5HP", category: "Balance of Systems", hpRating: "N/A", serialTracked: false, valuationAmount: 850.00 },
   { code: "MC4-PV-1000V", description: "MC4 PV CABLE CONNECTOR PAIR 1000V", category: "Wiring", hpRating: "N/A", serialTracked: false, valuationAmount: 350.00 },
+  { code: "MC4-CONNECTOR", description: "MC4 CONNECTOR", category: "Wiring", hpRating: "N/A", serialTracked: false, valuationAmount: 200.00 },
   { code: "3PIN-30A-500V", description: "3-Pin Cableconnector Pair30A 500V AC", category: "Wiring", hpRating: "N/A", serialTracked: false, valuationAmount: 550.00 },
   { code: "RMS-4G-GPS", description: "Remote Monittoring System 4g+Gps+Dispaly", category: "Balance of Systems", hpRating: "N/A", serialTracked: true, valuationAmount: 4500.00 },
   { code: "SPD-DC-1000V", description: "SPPV3T2-1000 DC SPD CLASS II 1000V", category: "Balance of Systems", hpRating: "N/A", serialTracked: false, valuationAmount: 1800.00 },
@@ -264,9 +278,42 @@ async function main() {
         "RMS-4G-GPS", "SPD-DC-1000V", "PV-MODULES", "TOGGLE-SWITCH"
       ];
 
-      const partsToSeed = schema === "haryana"
-        ? defaultParts.filter(p => haryanaPartCodes.includes(p.code))
-        : defaultParts;
+      const rajasthanPartCodes = [
+        "PUMP-7.5HP-DC-30M", "PUMP-7.5HP-DC-50M", "PUMP-7.5HP-DC-70M", "PUMP-7.5HP-DC-100M",
+        "PUMP-7.5HP-AC-30M", "PUMP-7.5HP-AC-50M", "PUMP-7.5HP-AC-70M", "PUMP-7.5HP-AC-100M",
+        "PUMP-5HP-DC-30M", "PUMP-5HP-DC-50M", "PUMP-5HP-DC-70M", "PUMP-5HP-DC-100M",
+        "PUMP-5HP-AC-30M", "PUMP-5HP-AC-50M", "PUMP-5HP-AC-70M", "PUMP-5HP-AC-100M",
+        "PUMP-3HP-DC-30M", "PUMP-3HP-DC-50M", "PUMP-3HP-DC-70M",
+        "PUMP-3HP-AC-30M", "PUMP-3HP-AC-50M", "PUMP-3HP-AC-70M",
+        "MOTOR-7.5HP-DC", "MOTOR-7.5HP-AC",
+        "MOTOR-5HP-DC", "MOTOR-5HP-AC",
+        "MOTOR-3HP-DC", "MOTOR-3HP-AC",
+        "PCB-7.5HP-DC", "PCB-7.5HP-AC",
+        "PCB-5HP-DC",
+        "PCB-3HP-DC", "PCB-3HP-AC",
+        "MCB-2P-32A", "MCB-2P-16A", "MC4-PV-1000V", "3PIN-30A-500V",
+        "RMS-4G-GPS", "SPD-DC-1000V", "PV-MODULES", "TOGGLE-SWITCH"
+      ];
+
+      const mpPartCodes = [
+        "PUMP-2HP-DC-30M", "PUMP-3HP-DC-30M", "PUMP-3HP-DC-50M", "PUMP-3HP-DC-70M",
+        "PUMP-5HP-DC-30M", "PUMP-5HP-DC-50M", "PUMP-5HP-DC-70M", "PUMP-5HP-DC-100M",
+        "PUMP-7.5HP-DC-30M", "PUMP-7.5HP-DC-50M", "PUMP-7.5HP-DC-70M", "PUMP-7.5HP-DC-100M",
+        "PUMP-7.5HP-AC-30M", "PUMP-7.5HP-AC-50M", "PUMP-7.5HP-AC-70M", "PUMP-7.5HP-AC-100M",
+        "MOTOR-7.5HP-AC", "MOTOR-7.5HP-DC", "MOTOR-5HP-DC", "MOTOR-3HP-DC", "MOTOR-2HP-DC",
+        "MCB-2P-16A", "MCB-2P-20A", "MCB-2P-32A",
+        "PCB-2HP-DC", "PCB-3HP-DC", "PCB-5HP-DC", "PCB-7.5HP-AC", "PCB-7.5HP-DC",
+        "3PIN-30A-500V", "MC4-PV-1000V", "MC4-CONNECTOR", "RMS-4G-GPS", "SPD-DC-1000V", "PV-MODULES"
+      ];
+
+      let partsToSeed = defaultParts;
+      if (schema === "haryana") {
+        partsToSeed = defaultParts.filter(p => haryanaPartCodes.includes(p.code));
+      } else if (schema === "rajasthan") {
+        partsToSeed = defaultParts.filter(p => rajasthanPartCodes.includes(p.code));
+      } else if (schema === "mp") {
+        partsToSeed = defaultParts.filter(p => mpPartCodes.includes(p.code));
+      }
 
       for (const part of partsToSeed) {
         await prisma.part.upsert({

@@ -137,6 +137,10 @@ export function Warehouse() {
     async function loadWarehouseData() {
       setLoading(true);
       try {
+        invalidateSerialsCache();
+        const pts = await api.getWmsParts();
+        setParts(pts);
+        
         const stock = await api.getWmsStock(selectedWarehouseId);
         const movs = await api.getWmsMovements(selectedWarehouseId);
         const chls = await api.getWmsChallans(selectedWarehouseId);
@@ -150,6 +154,17 @@ export function Warehouse() {
 
         if (chls.length > 0) {
           setSelectedChallan(chls[0]);
+        }
+
+        // Ensure form line default points to active warehouse's first part
+        if (pts.length > 0) {
+          setFormLines(prev => {
+            const hasValidPart = pts.some((p: any) => p.code === prev[0]?.partCode);
+            if (!hasValidPart) {
+              return [{ partCode: pts[0].code, quantity: 1, serialsText: "", replacedSerialsText: "" }];
+            }
+            return prev;
+          });
         }
       } catch (err) {
         console.error("Failed to load WMS data", err);
