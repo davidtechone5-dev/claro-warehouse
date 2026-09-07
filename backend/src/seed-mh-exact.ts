@@ -28,77 +28,46 @@ const prisma = new PrismaClient({
   }
 });
 
+// Exact 31 SKUs for Maharashtra as per Parts for MH.docx (Table 0)
 const defaultParts = [
-  // 3HP
+  // 3HP (5 items)
+  { code: "MOTOR-3HP-DC", description: "3HP Dc Mono Solar Motor", category: "Motors", hpRating: "3HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 8000.00 },
   { code: "PUMP-3HP-DC-30M", description: "3HP DC 30M MONO SOLAR PUMP", category: "Pumps", hpRating: "3HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 11000.00 },
   { code: "PUMP-3HP-DC-50M", description: "3HP DC 50M MONO SOLAR PUMP", category: "Pumps", hpRating: "3HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 11500.00 },
   { code: "PUMP-3HP-DC-70M", description: "3HP DC 70M MONO SOLAR PUMP", category: "Pumps", hpRating: "3HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 12000.00 },
-  { code: "PUMP-3HP-AC-30M", description: "3HP AC 30M MONO SOLAR PUMP", category: "Pumps", hpRating: "3HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 11000.00 },
-  { code: "PUMP-3HP-AC-50M", description: "3 HP AC HEAD 50M PUMP", category: "Pumps", hpRating: "3HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 11500.00 },
-  { code: "PUMP-3HP-AC-70M", description: "3 HP AC HEAD 70M PUMP", category: "Pumps", hpRating: "3HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 12000.00 },
-  { code: "MOTOR-3HP-DC", description: "3HP Dc Mono Solar Motor", category: "Motors", hpRating: "3HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 8000.00 },
-  { code: "MOTOR-3HP-AC", description: "3HP AC MONO SOLAR MOTOR", category: "Motors", hpRating: "3HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 7500.00 },
-  { code: "PCB-3HP-DC", description: "3HP DC POWOR CARD", category: "Inverters", hpRating: "3HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 4500.00 },
-  { code: "PCB-3HP-AC", description: "3HP AC MONO SOLAR CONTROLLERPOWER PCB", category: "Inverters", hpRating: "3HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 4200.00 },
+  { code: "PCB-3HP-DC", description: "3HP Dc Mono Solar Controller Power Pcb", category: "Inverters", hpRating: "3HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 4500.00 },
 
-  // 5HP
+  // 5HP (6 items)
+  { code: "MOTOR-5HP-DC", description: "5HP Dc Mono Solar Motor", category: "Motors", hpRating: "5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 10000.00 },
   { code: "PUMP-5HP-DC-30M", description: "5HP DC 30M MONO SOLAR PUMP", category: "Pumps", hpRating: "5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 14000.00 },
-  { code: "PUMP-5HP-DC-50M", description: "5 HP DC HEAD 50M PUMP", category: "Pumps", hpRating: "5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 14500.00 },
+  { code: "PUMP-5HP-DC-50M", description: "5HP DC 50M MONO SOLAR PUMP", category: "Pumps", hpRating: "5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 14500.00 },
   { code: "PUMP-5HP-DC-70M", description: "5HP DC 70M MONO SOLAR PUMP", category: "Pumps", hpRating: "5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 15000.00 },
   { code: "PUMP-5HP-DC-100M", description: "5HP DC 100M MONO SOLAR PUMP", category: "Pumps", hpRating: "5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 16000.00 },
-  { code: "PUMP-5HP-AC-30M", description: "5 HP AC HEAD 30M PUMP", category: "Pumps", hpRating: "5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 13500.00 },
-  { code: "PUMP-5HP-AC-50M", description: "5 HP AC HEAD 50M PUMP", category: "Pumps", hpRating: "5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 14000.00 },
-  { code: "PUMP-5HP-AC-70M", description: "5HP AC 70M MONO SOLAR PUMP", category: "Pumps", hpRating: "5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 15000.00 },
-  { code: "PUMP-5HP-AC-100M", description: "5 HP AC HEAD 100M PUMP", category: "Pumps", hpRating: "5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 15500.00 },
-  { code: "MOTOR-5HP-DC", description: "5HP Dc Mono Solar Motor", category: "Motors", hpRating: "5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 10000.00 },
-  { code: "MOTOR-5HP-AC", description: "5HP AC MONO SOLAR MOTOR", category: "Motors", hpRating: "5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 9500.00 },
-  { code: "PCB-5HP-DC", description: "5HP POWOR CARD", category: "Inverters", hpRating: "5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 6000.00 },
-  { code: "PCB-5HP-AC", description: "5 HP AC POWER CARD", category: "Inverters", hpRating: "5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 5800.00 },
+  { code: "PCB-5HP-DC", description: "5HP Dc Mono Solar Controller Power Pcb", category: "Inverters", hpRating: "5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 6000.00 },
 
-  // 7.5HP
+  // 7.5HP (6 items)
+  { code: "MOTOR-7.5HP-DC", description: "7.5hp Dc Mono Solar Motor", category: "Motors", hpRating: "7.5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 14000.00 },
   { code: "PUMP-7.5HP-DC-30M", description: "7.5HP DC 30M MONO SOLAR PUMP", category: "Pumps", hpRating: "7.5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 18000.00 },
   { code: "PUMP-7.5HP-DC-50M", description: "7.5HP DC 50M MONO SOLAR PUMP", category: "Pumps", hpRating: "7.5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 18500.00 },
   { code: "PUMP-7.5HP-DC-70M", description: "7.5HP DC 70M MONO SOLAR PUMP", category: "Pumps", hpRating: "7.5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 19000.00 },
   { code: "PUMP-7.5HP-DC-100M", description: "7.5HP DC 100M MONO SOLAR PUMP", category: "Pumps", hpRating: "7.5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 20000.00 },
-  { code: "PUMP-7.5HP-AC-30M", description: "7.5 HP AC HEAD 30M PUMP", category: "Pumps", hpRating: "7.5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 17500.00 },
-  { code: "PUMP-7.5HP-AC-50M", description: "7.5 HP AC HEAD 50M PUMP", category: "Pumps", hpRating: "7.5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 18000.00 },
-  { code: "PUMP-7.5HP-AC-70M", description: "7.5HP AC 70M MONO SOLAR PUMP", category: "Pumps", hpRating: "7.5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 18500.00 },
-  { code: "PUMP-7.5HP-AC-100M", description: "7.5HP AC 100M MONO SOLAR PUMP", category: "Pumps", hpRating: "7.5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 19500.00 },
-  { code: "MOTOR-7.5HP-DC", description: "7.5hp Dc Mono Solar Motor", category: "Motors", hpRating: "7.5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 14000.00 },
-  { code: "MOTOR-7.5HP-AC", description: "7.5HP AC MONO SOLAR MOTOR", category: "Motors", hpRating: "7.5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 13500.00 },
   { code: "PCB-7.5HP-DC", description: "7.5HP Dc Mono Solar Controller Power Pcb", category: "Inverters", hpRating: "7.5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 8500.00 },
-  { code: "PCB-7.5HP-AC", description: "7.5hp Ac Mono Solar Controller Power Pcb", category: "Inverters", hpRating: "7.5HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 8000.00 },
 
-  // 10HP
-  { code: "PUMP-10HP-DC-30M", description: "10HP DC MONO 30M SOLAR PUMP", category: "Pumps", hpRating: "10HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 21000.00 },
-  { code: "PUMP-10HP-DC-50M", description: "10HP DC 50M MONO SOLAR PUMP", category: "Pumps", hpRating: "10HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 21500.00 },
-  { code: "PUMP-10HP-DC-70M", description: "10HP DC 70M MONO SOLAR PUMP", category: "Pumps", hpRating: "10HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 22000.00 },
-  { code: "PUMP-10HP-DC-100M", description: "10HP DC 100M MONO SOLAR PUMP", category: "Pumps", hpRating: "10HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 23000.00 },
-  { code: "PUMP-10HP-AC-30M", description: "10HP AC 30M MONO SOLAR PUMP", category: "Pumps", hpRating: "10HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 20000.00 },
-  { code: "PUMP-10HP-AC-50M", description: "10HP AC 50M MONO SOLAR PUMP", category: "Pumps", hpRating: "10HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 20500.00 },
-  { code: "PUMP-10HP-AC-70M", description: "10HP AC 70M MONO SOLAR PUMP", category: "Pumps", hpRating: "10HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 21000.00 },
-  { code: "PUMP-10HP-AC-100M", description: "10HP AC 100M MONO SOLAR PUMP", category: "Pumps", hpRating: "10HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 22000.00 },
-  { code: "MOTOR-10HP-DC", description: "10HP Dc Mono Solar Motor", category: "Motors", hpRating: "10HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 17000.00 },
-  { code: "MOTOR-10HP-AC", description: "10HP AC MONO SOLAR MOTOR", category: "Motors", hpRating: "10HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 16000.00 },
-  { code: "PCB-10HP-DC", description: "10hp Dc Mono Solar Controller Power Pcb", category: "Inverters", hpRating: "10HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 10500.00 },
-  { code: "PCB-10HP-AC", description: "10hp Ac Mono Solar Controller Power Pcb", category: "Inverters", hpRating: "10HP", serialTracked: true, trackingType: "STRICT", valuationAmount: 9500.00 },
-
-  // General & Accessories / BOS
+  // Balance of Systems & Accessories (14 items)
   { code: "MCB-2P-32A", description: "2P 32A 800V DC MCB 7.5/10HP", category: "Balance of Systems", hpRating: "N/A", serialTracked: false, trackingType: "NONE", valuationAmount: 1200.00 },
   { code: "MCB-2P-20A", description: "2P 20A 500V DC MCB 3HP/5HP", category: "Balance of Systems", hpRating: "N/A", serialTracked: false, trackingType: "NONE", valuationAmount: 950.00 },
-  { code: "MCB-2P-16A", description: "2P 16A 500V DC MCB 3/5HP", category: "Balance of Systems", hpRating: "N/A", serialTracked: false, trackingType: "NONE", valuationAmount: 850.00 },
   { code: "MC4-PV-1000V", description: "MC4 PV CABLE CONNECTOR PAIR 1000V", category: "Wiring", hpRating: "N/A", serialTracked: false, trackingType: "NONE", valuationAmount: 350.00 },
   { code: "MC4-CONNECTOR", description: "MC4 PANEL CONNECTOR", category: "Wiring", hpRating: "N/A", serialTracked: false, trackingType: "NONE", valuationAmount: 200.00 },
   { code: "3PIN-30A-500V", description: "3-Pin Cableconnector Pair30A 500V AC", category: "Wiring", hpRating: "N/A", serialTracked: false, trackingType: "NONE", valuationAmount: 550.00 },
   { code: "RMS-4G-GPS", description: "Remote Monittoring System 4g+Gps+Dispaly", category: "Balance of Systems", hpRating: "N/A", serialTracked: true, trackingType: "DISPATCH_ONLY", valuationAmount: 4500.00 },
   { code: "SPD-DC-1000V", description: "SPPV3T2-1000 DC SPD CLASS II 1000V", category: "Balance of Systems", hpRating: "N/A", serialTracked: false, trackingType: "NONE", valuationAmount: 1800.00 },
   { code: "SPD-DC-600V", description: "TX-DC-600V-40T2 DC SPD CLASS || 600V", category: "Balance of Systems", hpRating: "N/A", serialTracked: false, trackingType: "NONE", valuationAmount: 1500.00 },
-  { code: "SPD-AC", description: "AC SPD", category: "Balance of Systems", hpRating: "N/A", serialTracked: false, trackingType: "NONE", valuationAmount: 1600.00 },
-  { code: "PV-MODULES", description: "PANEL (PV MODULES)", category: "Solar Panels", hpRating: "N/A", serialTracked: true, trackingType: "DISPATCH_ONLY", valuationAmount: 8500.00 },
   { code: "TOGGLE-SWITCH", description: "TOGGLE SWITCH", category: "Balance of Systems", hpRating: "N/A", serialTracked: false, trackingType: "NONE", valuationAmount: 300.00 },
   { code: "SWITCH-BUTTON", description: "SWITCH BUTTON", category: "Balance of Systems", hpRating: "N/A", serialTracked: false, trackingType: "NONE", valuationAmount: 250.00 },
   { code: "JUMPER-PCB-DISP", description: "PCB-DISPLAY JUMPER WIRE", category: "Wiring", hpRating: "N/A", serialTracked: false, trackingType: "NONE", valuationAmount: 150.00 },
-  { code: "JUMPER-RMS-DISP", description: "RMS-DISPLAY JUMPER WIRE", category: "Wiring", hpRating: "N/A", serialTracked: false, trackingType: "NONE", valuationAmount: 150.00 }
+  { code: "JUMPER-RMS-DISP", description: "RMS-DISPLAY JUMPER WIRE", category: "Wiring", hpRating: "N/A", serialTracked: false, trackingType: "NONE", valuationAmount: 150.00 },
+  { code: "SPD-AC", description: "AC SPD", category: "Balance of Systems", hpRating: "N/A", serialTracked: false, trackingType: "NONE", valuationAmount: 1600.00 },
+  { code: "PV-MODULES", description: "PANEL", category: "Solar Panels", hpRating: "N/A", serialTracked: true, trackingType: "DISPATCH_ONLY", valuationAmount: 8500.00 }
 ];
 
 const defaultUser = {
