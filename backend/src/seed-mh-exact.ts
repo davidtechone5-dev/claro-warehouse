@@ -2,6 +2,8 @@ import { PrismaClient } from "@prisma/client";
 import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
+import { warehouseContext } from "./db";
+import { wmsService } from "./services/wms.service";
 
 dotenv.config();
 
@@ -291,6 +293,17 @@ async function main() {
   }
 
   console.log(`✨ Successfully seeded ${ledgerEntries.length} inventory records for Maharashtra (Jalna)!`);
+
+  // 5. Sync Material Requests from Google Sheets
+  console.log("🔄 Syncing active Material Requests for Maharashtra (Jalna)...");
+  try {
+    const syncRes = await warehouseContext.run("jalna", async () => {
+      return wmsService.syncRequests();
+    });
+    console.log("✅ Material Requests Synced:", syncRes);
+  } catch (err: any) {
+    console.warn("⚠️ Material Request sync warning:", err.message);
+  }
 }
 
 main()
