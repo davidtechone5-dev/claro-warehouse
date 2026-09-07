@@ -294,17 +294,19 @@ export function Warehouse() {
       };
     });
 
-    // Check that serial counts match quantities (only for serialized parts)
+    // Check that serial counts match quantities based on tracking type
     for (let i = 0; i < linesPayload.length; i++) {
       const line = linesPayload[i];
       const matchedPart = parts.find(p => p.code === line.partCode);
-      const isSerialized = matchedPart ? matchedPart.serialTracked : true;
+      const trackingType = matchedPart?.trackingType || (matchedPart?.serialTracked ? "STRICT" : "NONE");
+      const isStrict = trackingType === "STRICT";
+      const isDispatchOnly = trackingType === "DISPATCH_ONLY";
 
-      if (isSerialized) {
+      if (isStrict) {
         if (line.serials.length !== line.quantity) {
           setFeedbackMsg({
             type: "error",
-            text: `Line ${i + 1}: Registered ${line.serials.length} serial numbers but quantity says ${line.quantity}.`
+            text: `Line ${i + 1} (${line.partCode}): Registered ${line.serials.length} serial numbers but quantity says ${line.quantity}.`
           });
           setFormSubmitting(false);
           return;
@@ -317,6 +319,22 @@ export function Warehouse() {
           });
           setFormSubmitting(false);
           return;
+        }
+      } else if (isDispatchOnly) {
+        if (movementStage === 1) {
+          // Stage 1 Inward: No serials required (inwarded by bulk quantity)
+          line.serials = [];
+          line.replacedSerialsMap = {};
+        } else if (movementStage === 2) {
+          // Stage 2 Dispatch: Serials are COMPULSORY!
+          if (line.serials.length !== line.quantity) {
+            setFeedbackMsg({
+              type: "error",
+              text: `Line ${i + 1} (${line.partCode}): Serial scanning is compulsory during dispatch. Please scan ${line.quantity} serial barcode(s) (currently entered: ${line.serials.length}).`
+            });
+            setFormSubmitting(false);
+            return;
+          }
         }
       } else {
         // Clear serials for non-serialized items to keep payload clean
@@ -1288,7 +1306,11 @@ export function Warehouse() {
 
               {formLines.map((line, index) => {
                 const selectedPart = parts.find(p => p.code === line.partCode);
-                const isSerialized = selectedPart ? selectedPart.serialTracked : true;
+                const trackingType = selectedPart?.trackingType || (selectedPart?.serialTracked ? "STRICT" : "NONE");
+                const isStrict = trackingType === "STRICT";
+                const isDispatchOnly = trackingType === "DISPATCH_ONLY";
+                const requiresSerials = isStrict || (isDispatchOnly && movementStage === 2) || (movementStage === 3 || movementStage === 4 || movementStage === 5);
+                const isDispatchOnlyInward = isDispatchOnly && movementStage === 1;
 
                 return (
                   <div key={index} style={{ ...styles.lineRow, gridTemplateColumns: gridTemplate }}>
@@ -1315,7 +1337,11 @@ export function Warehouse() {
                       />
                     </div>
                     <div>
-                      {isSerialized ? (
+                      {isDispatchOnlyInward ? (
+                        <div style={{ padding: "0.6rem 0.85rem", color: "#1D4ED8", fontSize: "0.82rem", border: "1px dashed #93C5FD", borderRadius: "6px", backgroundColor: "#EFF6FF" }}>
+                          📦 <strong>Serial-on-Dispatch:</strong> Inwarded by quantity. Physical barcodes will be scanned during dispatch.
+                        </div>
+                      ) : requiresSerials && (isStrict || isDispatchOnly) ? (
                         <SerialPicker
                           partCode={line.partCode}
                           partDescription={selectedPart?.description}
@@ -1326,7 +1352,7 @@ export function Warehouse() {
                           onChange={(newSerials) => handleLineChange(index, "serialsText", newSerials)}
                           targetQuantity={Number(line.quantity) || 1}
                           onQuantityChange={(newQty) => handleLineChange(index, "quantity", newQty)}
-                          placeholder="Type or search serials..."
+                          placeholder={isDispatchOnly && movementStage === 2 ? "Scan physical unit barcode(s)..." : "Type or search serials..."}
                         />
                       ) : (
                         <div style={{ padding: "0.6rem 0.85rem", color: "var(--text-muted)", fontSize: "0.85rem", fontStyle: "italic", border: "1px dashed var(--border-color)", borderRadius: "6px", backgroundColor: "var(--bg-secondary)" }}>
@@ -1336,7 +1362,7 @@ export function Warehouse() {
                     </div>
                     {showOriginalSerials && (
                       <div>
-                        {isSerialized ? (
+                        {(isStrict || isDispatchOnly) ? (
                           <SerialPicker
                             partCode={line.partCode}
                             partDescription={selectedPart?.description}

@@ -54,6 +54,7 @@ model Part {
   category        String?
   hpRating        String?                 @map("hp_rating")
   serialTracked   Boolean                 @default(true) @map("serial_tracked")
+  trackingType    String                  @default("STRICT") @map("tracking_type") // STRICT, DISPATCH_ONLY, NONE
   valuationAmount Decimal                 @default(0.0) @map("valuation_amount")
   createdAt       DateTime                @default(now()) @map("created_at")
   updatedAt       DateTime                @default(now()) @map("updated_at")

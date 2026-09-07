@@ -523,7 +523,9 @@ export const wmsService = {
         });
         if (!part) throw new Error(`Part with code ${line.partCode} not found.`);
 
-        if (part.serialTracked) {
+        const trackingType = (part as any).trackingType || (part.serialTracked ? "STRICT" : "NONE");
+
+        if (trackingType === "STRICT") {
           if (!line.serials || line.serials.length === 0) {
             throw new Error(`Validation Error: Serial numbers are required for serialized part ${part.code}.`);
           }
@@ -624,8 +626,40 @@ export const wmsService = {
               }
             }
           }
+        } else if (trackingType === "DISPATCH_ONLY") {
+          // DISPATCH_ONLY (Solar Panels, RMS):
+          // Stage 1: No serials required at Inwarding (bulk count only)
+          // Stage 2: Serials are COMPULSORY at Dispatch (operator must scan the physical unit)
+          if (data.stage === 2) {
+            if (!line.serials || line.serials.length === 0) {
+              throw new Error(`Validation Error: Serial numbers are compulsory when dispatching ${part.code}. Please scan the barcode on each unit being dispatched.`);
+            }
+            if (line.serials.length !== line.quantity) {
+              throw new Error(`Validation Error: Part ${part.code} has quantity ${line.quantity} but ${line.serials.length} serials were scanned.`);
+            }
+            const freshCount = await tx.unitLedger.count({
+              where: { partCode: part.code, status: "Fresh", currentLocation: data.warehouseId }
+            });
+            if (freshCount < line.quantity) {
+              throw new Error(`Validation Error: Insufficient fresh stock for ${part.code}. Available: ${freshCount}, Required: ${line.quantity}`);
+            }
+          } else if (data.stage === 4) {
+            const faultyCount = await tx.unitLedger.count({
+              where: { partCode: part.code, status: "Faulty-Received", currentLocation: data.warehouseId }
+            });
+            if (faultyCount < line.quantity) {
+              throw new Error(`Validation Error: Insufficient faulty stock for ${part.code}. Available: ${faultyCount}, Required: ${line.quantity}`);
+            }
+          } else if (data.stage === 5) {
+            const mfgCount = await tx.unitLedger.count({
+              where: { partCode: part.code, status: "At-Manufacturer", currentLocation: data.partyName }
+            });
+            if (mfgCount < line.quantity) {
+              throw new Error(`Validation Error: Insufficient pending RMA stock for ${part.code} at ${data.partyName}. Available: ${mfgCount}, Required: ${line.quantity}`);
+            }
+          }
         } else {
-          // For non-serialized parts: Validate that they have enough stock in the source status!
+          // For non-serialized parts (NONE): Validate that they have enough stock in the source status!
           if (data.stage === 2) {
             const freshCount = await tx.unitLedger.count({
               where: { partCode: part.code, status: "Fresh", currentLocation: data.warehouseId }
@@ -685,8 +719,9 @@ export const wmsService = {
         });
 
         let resolvedSerials: string[] = [];
+        const trackingType = (part as any).trackingType || (part.serialTracked ? "STRICT" : "NONE");
 
-        if (part.serialTracked) {
+        if (trackingType === "STRICT") {
           resolvedSerials = line.serials.map(sn => sn.trim());
           await tx.movementSerialNumber.createMany({
             data: resolvedSerials.map(sn => ({
@@ -807,8 +842,138 @@ export const wmsService = {
               }
             }
           }
+        } else if (trackingType === "DISPATCH_ONLY") {
+          // DISPATCH_ONLY (Solar Panels, RMS):
+          if (data.stage === 1) {
+            // Inwarding: Generate fresh stock pool tokens (no serial input needed from user)
+            for (let i = 0; i < line.quantity; i++) {
+              resolvedSerials.push(`AUTO-${part.code}-${Math.random().toString(36).substring(2, 10).toUpperCase()}`);
+            }
+            for (const sn of resolvedSerials) {
+              await tx.unitLedger.create({
+                data: {
+                  serialNo: sn,
+                  partCode: part.code,
+                  status: "Fresh",
+                  condition: "New",
+                  currentLocation: data.warehouseId
+                }
+              });
+            }
+            await tx.movementSerialNumber.createMany({
+              data: resolvedSerials.map(sn => ({
+                movementLineId: movementLine.id,
+                serialNumber: sn
+              }))
+            });
+          } else if (data.stage === 2) {
+            // Dispatching: Scanned serials are compulsory & saved as Sent-to Farmer!
+            resolvedSerials = line.serials.map(sn => sn.trim());
+            await tx.movementSerialNumber.createMany({
+              data: resolvedSerials.map(sn => ({
+                movementLineId: movementLine.id,
+                serialNumber: sn
+              }))
+            });
+
+            // Consume 'line.quantity' Fresh units from available stock pool
+            const freshItems = await tx.unitLedger.findMany({
+              where: { partCode: part.code, status: "Fresh", currentLocation: data.warehouseId },
+              take: line.quantity
+            });
+            if (freshItems.length > 0) {
+              await tx.unitLedger.deleteMany({
+                where: { serialNo: { in: freshItems.map(item => item.serialNo) } }
+              });
+            }
+
+            // Upsert the physical scanned serials as Sent-to Farmer
+            for (const sn of resolvedSerials) {
+              await tx.unitLedger.upsert({
+                where: { serialNo: sn },
+                update: {
+                  status: "Sent-to Farmer",
+                  currentLocation: data.referenceNumber
+                },
+                create: {
+                  serialNo: sn,
+                  partCode: part.code,
+                  status: "Sent-to Farmer",
+                  condition: "New",
+                  currentLocation: data.referenceNumber
+                }
+              });
+            }
+          } else if (data.stage === 3) {
+            // Faulty received
+            resolvedSerials = (line.serials && line.serials.length > 0)
+              ? line.serials.map(sn => sn.trim())
+              : [];
+            if (resolvedSerials.length === 0) {
+              for (let i = 0; i < line.quantity; i++) {
+                resolvedSerials.push(`AUTO-${part.code}-${Math.random().toString(36).substring(2, 10).toUpperCase()}`);
+              }
+            }
+            for (const sn of resolvedSerials) {
+              await tx.unitLedger.upsert({
+                where: { serialNo: sn },
+                update: {
+                  status: "Faulty-Received",
+                  currentLocation: data.warehouseId
+                },
+                create: {
+                  serialNo: sn,
+                  partCode: part.code,
+                  status: "Faulty-Received",
+                  condition: "New",
+                  currentLocation: data.warehouseId
+                }
+              });
+            }
+            await tx.movementSerialNumber.createMany({
+              data: resolvedSerials.map(sn => ({
+                movementLineId: movementLine.id,
+                serialNumber: sn
+              }))
+            });
+          } else if (data.stage === 4) {
+            // RMA sent to manufacturer
+            const faultyItems = await tx.unitLedger.findMany({
+              where: { partCode: part.code, status: "Faulty-Received", currentLocation: data.warehouseId },
+              take: line.quantity
+            });
+            resolvedSerials = (line.serials && line.serials.length > 0)
+              ? line.serials.map(sn => sn.trim())
+              : faultyItems.map(item => item.serialNo);
+
+            await tx.unitLedger.updateMany({
+              where: { serialNo: { in: resolvedSerials } },
+              data: {
+                status: "At-Manufacturer",
+                currentLocation: data.partyName
+              }
+            });
+          } else if (data.stage === 5) {
+            // Repaired received back
+            const mfgItems = await tx.unitLedger.findMany({
+              where: { partCode: part.code, status: "At-Manufacturer", currentLocation: data.partyName },
+              take: line.quantity
+            });
+            resolvedSerials = (line.serials && line.serials.length > 0)
+              ? line.serials.map(sn => sn.trim())
+              : mfgItems.map(item => item.serialNo);
+
+            await tx.unitLedger.updateMany({
+              where: { serialNo: { in: resolvedSerials } },
+              data: {
+                status: "Fresh",
+                condition: "Repaired",
+                currentLocation: data.warehouseId
+              }
+            });
+          }
         } else {
-          // Non-serialized item: resolve dummy serials!
+          // Non-serialized item (NONE): resolve dummy serials!
           if (data.stage === 1) {
             // Generate new ones
             for (let i = 0; i < line.quantity; i++) {
