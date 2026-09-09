@@ -58,6 +58,8 @@ export function Warehouse() {
   // Logging Movement Form State
   const [movementStage, setMovementStage] = useState<number>(1);
   const [partyName, setPartyName] = useState<string>("");
+  const [isFreelancerMode, setIsFreelancerMode] = useState<boolean>(false);
+  const [freelancerName, setFreelancerName] = useState<string>("");
   const [referenceNumber, setReferenceNumber] = useState<string>("");
   const [vehicleNumber, setVehicleNumber] = useState<string>("");
   const [reportedFault, setReportedFault] = useState<string>("");
@@ -192,10 +194,14 @@ export function Warehouse() {
       setPartyName(manufacturers[0]?.name || "");
       setReferenceNumber("");
     } else if (movementStage === 2) {
-      setPartyName(engineers[0]?.name || "");
+      if (!isFreelancerMode) {
+        setPartyName(engineers[0]?.name || "");
+      }
       setReferenceNumber(farmers[0]?.applicationId || "");
     } else if (movementStage === 3) {
-      setPartyName(engineers[0]?.name || "");
+      if (!isFreelancerMode) {
+        setPartyName(engineers[0]?.name || "");
+      }
       setReferenceNumber(farmers[0]?.applicationId || "");
     } else if (movementStage === 4) {
       setPartyName(manufacturers[0]?.name || "");
@@ -204,7 +210,7 @@ export function Warehouse() {
       setPartyName(manufacturers[0]?.name || "");
       setReferenceNumber(pendingRMAs[0] || "");
     }
-  }, [movementStage, manufacturers, engineers, farmers, pendingRMAs]);
+  }, [movementStage, manufacturers, engineers, farmers, pendingRMAs, isFreelancerMode]);
 
 
 
@@ -217,9 +223,19 @@ export function Warehouse() {
     setPrefilledRequestId(req.id);
     setMovementStage(2); // Stage 2: Sent to farmer
     
-    // Find matched engineer from party master or preserve request engineer name
+    // Find matched engineer from party master or switch to freelancer write-in mode
     const matchedEng = engineers.find(e => e.name.toLowerCase() === req.engineer?.name?.toLowerCase());
-    setPartyName(matchedEng ? matchedEng.name : (req.engineer?.name || engineers[0]?.name || ""));
+    if (matchedEng) {
+      setIsFreelancerMode(false);
+      setPartyName(matchedEng.name);
+    } else if (req.engineer?.name) {
+      setIsFreelancerMode(true);
+      setFreelancerName(req.engineer.name);
+      setPartyName(req.engineer.name);
+    } else {
+      setIsFreelancerMode(false);
+      setPartyName(engineers[0]?.name || "");
+    }
 
     const farmerAppId = req.ticket?.complaint?.applicationId || req.remarks?.match(/MK\d+/)?.[0] || "";
     setReferenceNumber(farmerAppId);
@@ -377,6 +393,8 @@ export function Warehouse() {
       
       // Reset form
       setPartyName("");
+      setIsFreelancerMode(false);
+      setFreelancerName("");
       setReferenceNumber("");
       setVehicleNumber("");
       setReportedFault("");
@@ -1162,44 +1180,75 @@ export function Warehouse() {
                   />
                 </div>
                 <div style={styles.formGroup}>
-                  <label style={styles.label}>
-                    Service Engineer / Freelancer Name *
-                    <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginLeft: "6px", fontWeight: "normal" }}>
-                      (Select or type freelancer name)
-                    </span>
-                  </label>
-                  <input
-                    type="text"
-                    list="engineers-list"
-                    value={partyName}
-                    onChange={(e) => setPartyName(e.target.value)}
-                    placeholder="Select engineer or type freelancer name..."
-                    style={styles.input}
-                    required
-                  />
-                  {engineers.length > 0 && (
-                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.4rem", marginTop: "0.4rem" }}>
-                      <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Quick pick:</span>
-                      {engineers.map(eng => (
-                        <button
-                          key={eng.id || eng.name}
-                          type="button"
-                          onClick={() => setPartyName(eng.name)}
-                          style={{
-                            fontSize: "0.75rem",
-                            padding: "2px 8px",
-                            borderRadius: "4px",
-                            border: partyName === eng.name ? "1px solid var(--accent-primary)" : "1px solid var(--border-color)",
-                            background: partyName === eng.name ? "rgba(99, 102, 241, 0.15)" : "var(--bg-secondary)",
-                            color: partyName === eng.name ? "var(--accent-primary)" : "var(--text-muted)",
-                            cursor: "pointer",
-                            fontWeight: partyName === eng.name ? "600" : "normal"
-                          }}
-                        >
-                          {eng.name}
-                        </button>
-                      ))}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+                    <label style={{ ...styles.label, marginBottom: 0 }}>
+                      {isFreelancerMode ? "Freelancer Engineer Name *" : "Service Engineer Name * (Party Master)"}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isFreelancerMode) {
+                          setIsFreelancerMode(true);
+                          setPartyName(freelancerName || "");
+                        } else {
+                          setIsFreelancerMode(false);
+                          setPartyName(engineers[0]?.name || "");
+                        }
+                      }}
+                      style={{
+                        background: isFreelancerMode ? "rgba(99, 102, 241, 0.12)" : "transparent",
+                        color: "var(--accent-primary)",
+                        border: isFreelancerMode ? "1px solid var(--accent-primary)" : "1px dashed var(--accent-primary)",
+                        borderRadius: "4px",
+                        padding: "2px 8px",
+                        fontSize: "0.75rem",
+                        cursor: "pointer",
+                        fontWeight: "600"
+                      }}
+                    >
+                      {isFreelancerMode ? "📋 Pick from Registered Engineers" : "✏️ + Type Freelancer Name"}
+                    </button>
+                  </div>
+
+                  {isFreelancerMode ? (
+                    <div>
+                      <input
+                        type="text"
+                        value={partyName}
+                        onChange={(e) => {
+                          setPartyName(e.target.value);
+                          setFreelancerName(e.target.value);
+                        }}
+                        placeholder="Type freelancer / engineer name (e.g. Ramesh Kumar)..."
+                        style={styles.input}
+                        required
+                        autoFocus
+                      />
+                      <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "4px" }}>
+                        ✍️ Freelancer Mode: You can type and add any freelancer's name directly.
+                      </div>
                     </div>
+                  ) : (
+                    <select 
+                      value={engineers.some(e => e.name === partyName) ? partyName : (engineers[0]?.name || "")} 
+                      onChange={(e) => {
+                        if (e.target.value === "__CUSTOM_FREELANCER__") {
+                          setIsFreelancerMode(true);
+                          setPartyName(freelancerName || "");
+                        } else {
+                          setPartyName(e.target.value);
+                        }
+                      }} 
+                      style={styles.input}
+                      required
+                    >
+                      {engineers.map(eng => (
+                        <option key={eng.id || eng.name} value={eng.name}>
+                          {eng.name} {eng.phone ? `(${eng.phone})` : ""}
+                        </option>
+                      ))}
+                      <option value="__CUSTOM_FREELANCER__">➕ Type Freelancer / Custom Name...</option>
+                    </select>
                   )}
                 </div>
               </>
@@ -1209,44 +1258,75 @@ export function Warehouse() {
             {movementStage === 3 && (
               <>
                 <div style={styles.formGroup}>
-                  <label style={styles.label}>
-                    Service Engineer / Freelancer Name *
-                    <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginLeft: "6px", fontWeight: "normal" }}>
-                      (Select or type freelancer name)
-                    </span>
-                  </label>
-                  <input
-                    type="text"
-                    list="engineers-list"
-                    value={partyName}
-                    onChange={(e) => setPartyName(e.target.value)}
-                    placeholder="Select engineer or type freelancer name..."
-                    style={styles.input}
-                    required
-                  />
-                  {engineers.length > 0 && (
-                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.4rem", marginTop: "0.4rem" }}>
-                      <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Quick pick:</span>
-                      {engineers.map(eng => (
-                        <button
-                          key={eng.id || eng.name}
-                          type="button"
-                          onClick={() => setPartyName(eng.name)}
-                          style={{
-                            fontSize: "0.75rem",
-                            padding: "2px 8px",
-                            borderRadius: "4px",
-                            border: partyName === eng.name ? "1px solid var(--accent-primary)" : "1px solid var(--border-color)",
-                            background: partyName === eng.name ? "rgba(99, 102, 241, 0.15)" : "var(--bg-secondary)",
-                            color: partyName === eng.name ? "var(--accent-primary)" : "var(--text-muted)",
-                            cursor: "pointer",
-                            fontWeight: partyName === eng.name ? "600" : "normal"
-                          }}
-                        >
-                          {eng.name}
-                        </button>
-                      ))}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+                    <label style={{ ...styles.label, marginBottom: 0 }}>
+                      {isFreelancerMode ? "Freelancer Engineer Name *" : "Service Engineer Name * (Party Master)"}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isFreelancerMode) {
+                          setIsFreelancerMode(true);
+                          setPartyName(freelancerName || "");
+                        } else {
+                          setIsFreelancerMode(false);
+                          setPartyName(engineers[0]?.name || "");
+                        }
+                      }}
+                      style={{
+                        background: isFreelancerMode ? "rgba(99, 102, 241, 0.12)" : "transparent",
+                        color: "var(--accent-primary)",
+                        border: isFreelancerMode ? "1px solid var(--accent-primary)" : "1px dashed var(--accent-primary)",
+                        borderRadius: "4px",
+                        padding: "2px 8px",
+                        fontSize: "0.75rem",
+                        cursor: "pointer",
+                        fontWeight: "600"
+                      }}
+                    >
+                      {isFreelancerMode ? "📋 Pick from Registered Engineers" : "✏️ + Type Freelancer Name"}
+                    </button>
+                  </div>
+
+                  {isFreelancerMode ? (
+                    <div>
+                      <input
+                        type="text"
+                        value={partyName}
+                        onChange={(e) => {
+                          setPartyName(e.target.value);
+                          setFreelancerName(e.target.value);
+                        }}
+                        placeholder="Type freelancer / engineer name (e.g. Ramesh Kumar)..."
+                        style={styles.input}
+                        required
+                        autoFocus
+                      />
+                      <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "4px" }}>
+                        ✍️ Freelancer Mode: You can type and add any freelancer's name directly.
+                      </div>
                     </div>
+                  ) : (
+                    <select 
+                      value={engineers.some(e => e.name === partyName) ? partyName : (engineers[0]?.name || "")} 
+                      onChange={(e) => {
+                        if (e.target.value === "__CUSTOM_FREELANCER__") {
+                          setIsFreelancerMode(true);
+                          setPartyName(freelancerName || "");
+                        } else {
+                          setPartyName(e.target.value);
+                        }
+                      }} 
+                      style={styles.input}
+                      required
+                    >
+                      {engineers.map(eng => (
+                        <option key={eng.id || eng.name} value={eng.name}>
+                          {eng.name} {eng.phone ? `(${eng.phone})` : ""}
+                        </option>
+                      ))}
+                      <option value="__CUSTOM_FREELANCER__">➕ Type Freelancer / Custom Name...</option>
+                    </select>
                   )}
                 </div>
                 <div style={styles.formGroup}>
