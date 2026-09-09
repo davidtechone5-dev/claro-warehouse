@@ -88,9 +88,7 @@ const defaultManufacturers = [
 ];
 
 const defaultEngineers = [
-  { name: "Pruthviraj Borde", email: "pruthviraj@claro.com", phone: "9001163111", isActive: true },
-  { name: "Shaikh Shoeb Ahmed", email: "shoeb@claro.com", phone: "9001163222", isActive: true },
-  { name: "Sikander", email: "sikander@claro.com", phone: "9001163333", isActive: true }
+  { name: "Bhagwan Sahai Bairwa", email: "bhagwan@claro.com", phone: "9001163111", isActive: true }
 ];
 
 const defaultUser = {
@@ -129,6 +127,9 @@ async function seedRajasthan() {
   }
 
   // 4. Upsert Engineers
+  await prisma.engineer.deleteMany({
+    where: { email: { notIn: defaultEngineers.map(e => e.email) } }
+  });
   for (const eng of defaultEngineers) {
     await prisma.engineer.upsert({
       where: { email: eng.email },

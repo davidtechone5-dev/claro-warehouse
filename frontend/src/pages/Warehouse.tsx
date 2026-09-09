@@ -217,9 +217,9 @@ export function Warehouse() {
     setPrefilledRequestId(req.id);
     setMovementStage(2); // Stage 2: Sent to farmer
     
-    // Find matched engineer from party master
+    // Find matched engineer from party master or preserve request engineer name
     const matchedEng = engineers.find(e => e.name.toLowerCase() === req.engineer?.name?.toLowerCase());
-    setPartyName(matchedEng ? matchedEng.name : (engineers[0]?.name || ""));
+    setPartyName(matchedEng ? matchedEng.name : (req.engineer?.name || engineers[0]?.name || ""));
 
     const farmerAppId = req.ticket?.complaint?.applicationId || req.remarks?.match(/MK\d+/)?.[0] || "";
     setReferenceNumber(farmerAppId);
@@ -1162,17 +1162,45 @@ export function Warehouse() {
                   />
                 </div>
                 <div style={styles.formGroup}>
-                  <label style={styles.label}>Service Engineer Name * (Party Master)</label>
-                  <select 
-                    value={partyName} 
-                    onChange={(e) => setPartyName(e.target.value)} 
+                  <label style={styles.label}>
+                    Service Engineer / Freelancer Name *
+                    <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginLeft: "6px", fontWeight: "normal" }}>
+                      (Select or type freelancer name)
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    list="engineers-list"
+                    value={partyName}
+                    onChange={(e) => setPartyName(e.target.value)}
+                    placeholder="Select engineer or type freelancer name..."
                     style={styles.input}
                     required
-                  >
-                    {engineers.map(eng => (
-                      <option key={eng.id} value={eng.name}>{eng.name}</option>
-                    ))}
-                  </select>
+                  />
+                  {engineers.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.4rem", marginTop: "0.4rem" }}>
+                      <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Quick pick:</span>
+                      {engineers.map(eng => (
+                        <button
+                          key={eng.id || eng.name}
+                          type="button"
+                          onClick={() => setPartyName(eng.name)}
+                          style={{
+                            fontSize: "0.75rem",
+                            padding: "2px 8px",
+                            borderRadius: "4px",
+                            border: partyName === eng.name ? "1px solid var(--accent-primary)" : "1px solid var(--border-color)",
+                            background: partyName === eng.name ? "rgba(99, 102, 241, 0.15)" : "var(--bg-secondary)",
+                            color: partyName === eng.name ? "var(--accent-primary)" : "var(--text-muted)",
+                            cursor: "pointer",
+                            fontWeight: partyName === eng.name ? "600" : "normal"
+                          }}
+                        >
+                          {eng.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -1181,17 +1209,45 @@ export function Warehouse() {
             {movementStage === 3 && (
               <>
                 <div style={styles.formGroup}>
-                  <label style={styles.label}>Service Engineer Name * (Party Master)</label>
-                  <select 
-                    value={partyName} 
-                    onChange={(e) => setPartyName(e.target.value)} 
+                  <label style={styles.label}>
+                    Service Engineer / Freelancer Name *
+                    <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginLeft: "6px", fontWeight: "normal" }}>
+                      (Select or type freelancer name)
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    list="engineers-list"
+                    value={partyName}
+                    onChange={(e) => setPartyName(e.target.value)}
+                    placeholder="Select engineer or type freelancer name..."
                     style={styles.input}
                     required
-                  >
-                    {engineers.map(eng => (
-                      <option key={eng.id} value={eng.name}>{eng.name}</option>
-                    ))}
-                  </select>
+                  />
+                  {engineers.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.4rem", marginTop: "0.4rem" }}>
+                      <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Quick pick:</span>
+                      {engineers.map(eng => (
+                        <button
+                          key={eng.id || eng.name}
+                          type="button"
+                          onClick={() => setPartyName(eng.name)}
+                          style={{
+                            fontSize: "0.75rem",
+                            padding: "2px 8px",
+                            borderRadius: "4px",
+                            border: partyName === eng.name ? "1px solid var(--accent-primary)" : "1px solid var(--border-color)",
+                            background: partyName === eng.name ? "rgba(99, 102, 241, 0.15)" : "var(--bg-secondary)",
+                            color: partyName === eng.name ? "var(--accent-primary)" : "var(--text-muted)",
+                            cursor: "pointer",
+                            fontWeight: partyName === eng.name ? "600" : "normal"
+                          }}
+                        >
+                          {eng.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Farmer / Site details (App ID) * (Party Master)</label>
@@ -1427,6 +1483,13 @@ export function Warehouse() {
           </div>
 
           {/* Autocomplete datalists */}
+          <datalist id="engineers-list">
+            {engineers.map(eng => (
+              <option key={eng.id || eng.name} value={eng.name}>
+                {eng.phone ? `${eng.name} (${eng.phone})` : eng.name}
+              </option>
+            ))}
+          </datalist>
           <datalist id="farmer-app-ids">
             {farmers.map(f => (
               <option key={f.applicationId} value={f.applicationId}>{f.clientName}</option>
